@@ -1,0 +1,34 @@
+import java.util.List;
+
+public record GameSnapshot(
+    String opponentName,
+    String opponentLine,
+    String dealerCards,
+    int dealerVisibleValue,
+    int dealerFinalValue,
+    List<String> playerHands,
+    List<Integer> playerValues,
+    List<Integer> handBets,
+    int activeHandIndex,
+    int bankroll,
+    int streak,
+    int bestStreak,
+    int suspicion,
+    int wins,
+    int losses,
+    int shoeCards,
+    String statusText,
+    String eventText,
+    boolean roundActive,
+    boolean roundResolved,
+    boolean canDeal,
+    boolean canHit,
+    boolean canStand,
+    boolean canDouble,
+    boolean canSplit,
+    boolean canCheat,
+    boolean duelActive,
+    boolean duelCanDraw,
+    boolean showLoading
+) {
+}
