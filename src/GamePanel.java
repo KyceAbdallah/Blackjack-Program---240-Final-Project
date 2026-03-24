@@ -290,7 +290,7 @@ public class GamePanel extends JPanel {
 
         currentSnapshot = controller.getSnapshot();
         opponentLabel.setText(currentSnapshot.opponentName());
-        statusLabel.setText("<html><body style='width:270px'>" + currentSnapshot.statusText().replace("\n", "<br>") + "</body></html>");
+        statusLabel.setText("<html><body style='width:250px'>" + currentSnapshot.statusText().replace("\n", "<br>") + "</body></html>");
 
         bankrollLabel.setText("Bankroll: $" + currentSnapshot.bankroll());
         potLabel.setText("Pot: $" + currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum());
@@ -315,23 +315,10 @@ public class GamePanel extends JPanel {
         doubleButton.setEnabled(currentSnapshot.canDouble());
         splitButton.setEnabled(currentSnapshot.canSplit());
         cheatButton.setEnabled(currentSnapshot.canCheat());
-        duelButton.setEnabled(currentSnapshot.duelActive());
+        duelButton.setEnabled(false);
 
-        if (currentSnapshot.duelActive() && !currentSnapshot.duelCanDraw() && !duelSequenceQueued) {
-            duelSequenceQueued = true;
-            soundManager.playEffect("glass-break.wav");
-            shakeFrame();
-            beginDuelTimer();
-        }
-        if (currentSnapshot.duelCanDraw()) {
-            duelSequenceQueued = false;
-            stopDuelTimer();
-            soundManager.playEffect("glass-break.wav");
-        }
-        if (!currentSnapshot.duelActive()) {
-            duelSequenceQueued = false;
-            stopDuelTimer();
-        }
+        duelSequenceQueued = false;
+        stopDuelTimer();
 
         tableCanvas.repaint();
         revalidate();
@@ -553,38 +540,34 @@ public class GamePanel extends JPanel {
         }
 
         private void drawDealerCards(Graphics2D g2, int width) {
-            g2.setColor(CREAM);
-            g2.setFont(new Font("Monospaced", Font.BOLD, 20));
-            String cards = currentSnapshot.dealerCards();
-            int cardsWidth = g2.getFontMetrics().stringWidth(cards);
-            g2.drawString(cards, width / 2 - cardsWidth / 2, 255);
-
+            drawCardRow(g2, parseCards(currentSnapshot.dealerCards()), width / 2, 255);
             g2.setFont(new Font("Dialog", Font.BOLD, 15));
             String value = currentSnapshot.roundActive()
                 ? "Showing " + currentSnapshot.dealerVisibleValue()
                 : "Value " + currentSnapshot.dealerFinalValue();
             int valueWidth = g2.getFontMetrics().stringWidth(value);
-            g2.drawString(value, width / 2 - valueWidth / 2, 280);
+            g2.setColor(CREAM);
+            g2.drawString(value, width / 2 - valueWidth / 2, 315);
         }
 
         private void drawPot(Graphics2D g2, int width, int height) {
             int pot = currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum();
             int centerX = width / 2;
-            int centerY = height / 2 + 10;
+            int centerY = height / 2 + 8;
 
             g2.setColor(GOLD);
             g2.setFont(new Font("Dialog", Font.BOLD, 20));
             String potText = "Pot: $" + pot;
             int potWidth = g2.getFontMetrics().stringWidth(potText);
-            g2.drawString(potText, centerX - potWidth / 2, centerY - 10);
+            g2.drawString(potText, centerX - potWidth / 2, centerY - 8);
 
-            drawChipStack(g2, centerX - 55, centerY + 16, CHIP_RED);
-            drawChipStack(g2, centerX - 15, centerY + 8, CHIP_WHITE);
-            drawChipStack(g2, centerX + 25, centerY + 16, CHIP_BLUE);
+            drawChipStack(g2, centerX - 76, centerY + 24, CHIP_RED, 4);
+            drawChipStack(g2, centerX - 17, centerY + 16, CHIP_WHITE, 5);
+            drawChipStack(g2, centerX + 42, centerY + 24, CHIP_BLUE, 4);
         }
 
-        private void drawChipStack(Graphics2D g2, int x, int y, Color color) {
-            for (int i = 0; i < 4; i++) {
+        private void drawChipStack(Graphics2D g2, int x, int y, Color color, int count) {
+            for (int i = 0; i < count; i++) {
                 int yy = y - i * 8;
                 g2.setColor(color);
                 g2.fillOval(x, yy, 34, 14);
@@ -595,29 +578,78 @@ public class GamePanel extends JPanel {
 
         private void drawPlayerArea(Graphics2D g2, int width, int height) {
             List<String> hands = currentSnapshot.playerHands();
-            int areaY = height - 145;
-            int spacing = hands.size() == 1 ? 0 : 190;
+            int areaY = height - 184;
+            int spacing = hands.size() == 1 ? 0 : 220;
             int startX = width / 2 - (hands.size() - 1) * spacing / 2;
 
             for (int i = 0; i < hands.size(); i++) {
                 boolean active = i == currentSnapshot.activeHandIndex() && currentSnapshot.roundActive();
                 int x = startX + i * spacing;
                 int bet = i < currentSnapshot.handBets().size() ? currentSnapshot.handBets().get(i) : 0;
+                int panelX = x - 110;
+                int panelY = areaY - 6;
+                int panelWidth = 220;
+                int panelHeight = 116;
 
                 g2.setColor(active ? new Color(255, 228, 164) : new Color(232, 222, 201));
-                g2.fillRoundRect(x - 90, areaY - 10, 180, 84, 20, 20);
+                g2.fillRoundRect(panelX, panelY, panelWidth, panelHeight, 20, 20);
                 g2.setColor(active ? GOLD : WOOD);
                 g2.setStroke(new BasicStroke(3f));
-                g2.drawRoundRect(x - 90, areaY - 10, 180, 84, 20, 20);
+                g2.drawRoundRect(panelX, panelY, panelWidth, panelHeight, 20, 20);
 
                 g2.setColor(new Color(54, 35, 24));
                 g2.setFont(new Font("Dialog", Font.BOLD, 14));
-                g2.drawString("Hand " + (i + 1) + "  Bet $" + bet, x - 72, areaY + 12);
-                g2.setFont(new Font("Monospaced", Font.BOLD, 22));
-                g2.drawString(hands.get(i), x - 72, areaY + 42);
+                g2.drawString("Hand " + (i + 1) + "  Bet $" + bet, panelX + 18, panelY + 24);
+                drawCardRow(g2, parseCards(hands.get(i)), x, panelY + 56);
                 g2.setFont(new Font("Dialog", Font.BOLD, 14));
-                g2.drawString("Value " + currentSnapshot.playerValues().get(i), x - 72, areaY + 64);
+                g2.drawString("Value " + currentSnapshot.playerValues().get(i), panelX + 18, panelY + 98);
             }
+        }
+
+        private void drawCardRow(Graphics2D g2, List<String> cards, int centerX, int baselineY) {
+            if (cards.isEmpty()) {
+                g2.setColor(CREAM);
+                g2.setFont(new Font("Dialog", Font.BOLD, 16));
+                String text = "No cards yet";
+                int width = g2.getFontMetrics().stringWidth(text);
+                g2.drawString(text, centerX - width / 2, baselineY);
+                return;
+            }
+
+            int cardWidth = 52;
+            int cardHeight = 70;
+            int gap = 12;
+            int totalWidth = cards.size() * cardWidth + (cards.size() - 1) * gap;
+            int startX = centerX - totalWidth / 2;
+            int y = baselineY - 35;
+
+            for (int i = 0; i < cards.size(); i++) {
+                int x = startX + i * (cardWidth + gap);
+                g2.setColor(new Color(248, 242, 231));
+                g2.fillRoundRect(x, y, cardWidth, cardHeight, 10, 10);
+                g2.setColor(WOOD);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawRoundRect(x, y, cardWidth, cardHeight, 10, 10);
+                g2.setFont(new Font("Dialog", Font.BOLD, 22));
+                String value = cards.get(i);
+                int textWidth = g2.getFontMetrics().stringWidth(value);
+                g2.drawString(value, x + (cardWidth - textWidth) / 2, y + 41);
+            }
+        }
+
+        private List<String> parseCards(String description) {
+            List<String> cards = new ArrayList<>();
+            if (description == null || description.isBlank()) {
+                return cards;
+            }
+            String[] parts = description.trim().split("\\s+");
+            for (String part : parts) {
+                String cleaned = part.replace("[", "").replace("]", "").trim();
+                if (!cleaned.isEmpty() && !cleaned.equals("?")) {
+                    cards.add(cleaned);
+                }
+            }
+            return cards;
         }
     }
 }

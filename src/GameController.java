@@ -23,8 +23,6 @@ public class GameController {
     private int activeHandIndex;
     private boolean roundActive;
     private boolean roundResolved;
-    private boolean duelActive;
-    private boolean duelCanDraw;
     private boolean loading = true;
     private String statusText = "Booting the saloon...";
     private String eventText = "DON'T GAMBLE. This simulation uses fake money.";
@@ -41,8 +39,9 @@ public class GameController {
 
     public void finishLoading() {
         loading = false;
-        statusText = currentOpponent.getName() + " settles into the far chair.";
-        eventText = "A dusty saloon wakes up around you.\n\n"
+        statusText = "The table is ready.";
+        eventText = currentOpponent.getName()
+            + " sits down across from you.\n\n"
             + currentOpponent.getIntroLine()
             + "\n\nFake money only. Real ego damage still applies.";
     }
@@ -60,7 +59,7 @@ public class GameController {
         }
 
         Hand dealerHand = dealer.getPrimaryHand();
-        boolean revealDealer = !roundActive || duelActive || roundResolved;
+        boolean revealDealer = !roundActive || roundResolved;
         String dealerCards = dealerHand.describe(revealDealer);
         int dealerVisibleValue = dealerHand.getCards().isEmpty() ? 0 : dealerHand.getCards().get(0).getValue();
 
@@ -85,20 +84,20 @@ public class GameController {
             eventText,
             roundActive,
             roundResolved,
-            !loading && !roundActive && !duelActive,
-            roundActive && !duelActive,
-            roundActive && !duelActive,
+            !loading && !roundActive,
+            roundActive,
+            roundActive,
             canDouble(),
             canSplit(),
             canCheat(),
-            duelActive,
-            duelCanDraw,
+            false,
+            false,
             loading
         );
     }
 
     public void setBetAndDeal(int bet) {
-        if (loading || duelActive || roundActive) {
+        if (loading || roundActive) {
             return;
         }
         if (bet < MIN_BET) {
@@ -133,7 +132,7 @@ public class GameController {
     }
 
     public void hit() {
-        if (!roundActive || duelActive) {
+        if (!roundActive) {
             return;
         }
         Hand hand = player.getHands().get(activeHandIndex);
@@ -146,11 +145,16 @@ public class GameController {
     }
 
     public void stand() {
-        if (!roundActive || duelActive) {
+        if (!roundActive) {
             return;
         }
-        player.getHands().get(activeHandIndex).stand();
-        moveToNextHandOrDealer();
+        for (Hand hand : player.getHands()) {
+            hand.stand();
+        }
+        while (dealer.shouldHit()) {
+            dealer.getPrimaryHand().addCard(shoe.deal());
+        }
+        resolveRound();
     }
 
     public void doubleDown() {
@@ -193,47 +197,16 @@ public class GameController {
     }
 
     public void startDuelSequence() {
-        duelActive = true;
-        duelCanDraw = false;
-        roundActive = false;
-        roundResolved = false;
-        statusText = currentOpponent.getName() + " flips the table and calls you a cheat.";
-        eventText = "Wait for DRAW, then hit the duel button or press SPACE.\nHands off the iron until then.";
+        statusText = "Duels are disabled for now.";
+        eventText = "The table stays calm while we tighten up the rest of the game.";
     }
 
     public void armDuel() {
-        if (!duelActive) {
-            return;
-        }
-        duelCanDraw = true;
-        duelDrawOpenedAt = System.currentTimeMillis();
-        statusText = "DRAW!";
-        eventText = "Now.";
+        statusText = "Duels are disabled for now.";
     }
 
     public void drawDuel() {
-        if (!duelActive) {
-            return;
-        }
-        if (!duelCanDraw) {
-            statusText = "Too early. Hands off the iron.";
-            loseDuel();
-            return;
-        }
-
-        long reactionTime = System.currentTimeMillis() - duelDrawOpenedAt;
-        int graceWindow = Math.max(250, 950 - currentOpponent.getDuelDifficulty());
-        if (reactionTime <= graceWindow) {
-            statusText = "You won the duel. The room goes quiet.";
-            eventText = "Glass shatters somewhere behind you.";
-            duelActive = false;
-            duelCanDraw = false;
-            player.coolSuspicion(30);
-            currentOpponent = randomOpponent();
-            saveManager.save(player, wins, losses);
-        } else {
-            loseDuel();
-        }
+        statusText = "Duels are disabled for now.";
     }
 
     public void resetSave() {
@@ -318,18 +291,14 @@ public class GameController {
         eventText = "Press Deal for the next hand.";
         player.coolSuspicion(anyLoss ? 8 : 4);
 
-        if (shouldTriggerAccusation(player.getSuspicion())) {
-            startDuelSequence();
-        } else {
-            if (player.getBankroll() < MIN_BET) {
-                player.adjustBankroll(150);
-                eventText = "The bartender fronts you $150 to keep the game alive.";
-            } else if (player.getStreak() >= 3) {
-                eventText = "A fresh opponent steps in while the old one drags the table upright.";
-                currentOpponent = randomOpponent();
-            }
-            saveManager.save(player, wins, losses);
+        if (player.getBankroll() < MIN_BET) {
+            player.adjustBankroll(150);
+            eventText = "The bartender fronts you $150 to keep the game alive.";
+        } else if (player.getStreak() >= 3) {
+            eventText = "A fresh opponent steps in while the old one drags the table upright.";
+            currentOpponent = randomOpponent();
         }
+        saveManager.save(player, wins, losses);
     }
 
     private boolean shouldTriggerAccusation(int suspicion) {
@@ -341,7 +310,7 @@ public class GameController {
     }
 
     private boolean canDouble() {
-        if (!roundActive || duelActive || activeHandIndex >= player.getHands().size()) {
+        if (!roundActive || activeHandIndex >= player.getHands().size()) {
             return false;
         }
         Hand hand = player.getHands().get(activeHandIndex);
@@ -349,35 +318,15 @@ public class GameController {
     }
 
     private boolean canSplit() {
-        if (!roundActive || duelActive || activeHandIndex >= player.getHands().size()) {
-            return false;
-        }
-        Hand hand = player.getHands().get(activeHandIndex);
-        return hand.canSplit() && player.getBankroll() >= player.getCurrentBet();
+        return false;
     }
 
     private boolean canCheat() {
-        return roundActive && !duelActive && activeHandIndex < player.getHands().size() && player.getSuspicion() < 100;
+        return roundActive && activeHandIndex < player.getHands().size() && player.getSuspicion() < 100;
     }
 
     private OpponentProfile randomOpponent() {
         return opponents.get(random.nextInt(opponents.size()));
     }
 
-    private void loseDuel() {
-        duelActive = false;
-        duelCanDraw = false;
-        int penalty = Math.min(120, Math.max(40, player.getCurrentBet()));
-        player.adjustBankroll(-penalty);
-        player.recordLoss();
-        losses++;
-        player.coolSuspicion(100);
-        statusText = currentOpponent.getName() + " wins the duel.";
-        eventText = "You lost the duel and pay a bruised-pride tax of $" + penalty + ".";
-        currentOpponent = randomOpponent();
-        if (player.getBankroll() < MIN_BET) {
-            player.adjustBankroll(150);
-        }
-        saveManager.save(player, wins, losses);
-    }
 }

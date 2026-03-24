@@ -21,6 +21,10 @@ public class Card {
 
     @Override
     public String toString() {
-        return rank.getSymbol() + suit.getSymbol();
+        return switch (rank) {
+            case JACK, QUEEN, KING -> "10";
+            case ACE -> "A";
+            default -> rank.getSymbol();
+        };
     }
 }

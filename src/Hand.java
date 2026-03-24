@@ -79,7 +79,7 @@ public class Hand {
 
     public String describe(boolean revealAll) {
         if (cards.isEmpty()) {
-            return "[empty]";
+            return "";
         }
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < cards.size(); i++) {
@@ -87,7 +87,7 @@ public class Hand {
                 builder.append(' ');
             }
             if (!revealAll && i == 1) {
-                builder.append("[??]");
+                builder.append("[?]");
             } else {
                 builder.append('[').append(cards.get(i)).append(']');
             }
