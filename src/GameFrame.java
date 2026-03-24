@@ -23,7 +23,14 @@ public class GameFrame extends JFrame {
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent event) {
-                if (event.getKeyCode() == KeyEvent.VK_SPACE && controller.getSnapshot().duelActive()) {
+                if (event.getKeyCode() != KeyEvent.VK_SPACE) {
+                    return;
+                }
+                if (panel.hasPendingNarrative()) {
+                    panel.advanceNarrative();
+                    return;
+                }
+                if (controller.getSnapshot().duelActive()) {
                     panel.fireDuelDraw();
                 }
             }

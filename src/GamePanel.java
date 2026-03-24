@@ -1,4 +1,5 @@
 import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -9,6 +10,10 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.RenderingHints;
+import java.awt.geom.Arc2D;
+import java.awt.geom.Ellipse2D;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -25,12 +30,16 @@ import javax.swing.SwingConstants;
 import javax.swing.Timer;
 
 public class GamePanel extends JPanel {
-    private static final Color BACKDROP = new Color(36, 21, 12);
-    private static final Color PANEL = new Color(86, 53, 33);
-    private static final Color ACCENT = new Color(219, 173, 88);
-    private static final Color DUST = new Color(242, 218, 170);
-    private static final Color FELT = new Color(31, 82, 54);
-    private static final Color DANGER = new Color(167, 48, 48);
+    private static final Color BACKDROP = new Color(44, 30, 20);
+    private static final Color FELT = new Color(28, 101, 71);
+    private static final Color FELT_DARK = new Color(15, 62, 43);
+    private static final Color WOOD = new Color(113, 73, 43);
+    private static final Color GOLD = new Color(239, 201, 104);
+    private static final Color CREAM = new Color(247, 236, 213);
+    private static final Color CHIP_RED = new Color(181, 58, 48);
+    private static final Color CHIP_BLUE = new Color(57, 94, 186);
+    private static final Color CHIP_WHITE = new Color(236, 236, 231);
+    private static final Color DANGER = new Color(189, 70, 47);
 
     private final GameController controller;
     private final JFrame frame;
@@ -41,34 +50,36 @@ public class GamePanel extends JPanel {
     private final JLabel opponentLabel = new JLabel();
     private final JLabel statusLabel = new JLabel();
     private final JTextArea eventArea = new JTextArea();
-    private final JLabel dealerLabel = new JLabel();
-    private final JLabel dealerValueLabel = new JLabel();
-    private final JPanel handsPanel = new JPanel();
     private final JLabel bankrollLabel = new JLabel();
-    private final JLabel streakLabel = new JLabel();
+    private final JLabel potLabel = new JLabel();
     private final JLabel recordLabel = new JLabel();
     private final JLabel shoeLabel = new JLabel();
     private final JProgressBar suspicionBar = new JProgressBar(0, 100);
     private final JTextField betField = new JTextField("25");
-    private final JButton dealButton = new JButton("DEAL");
-    private final JButton hitButton = new JButton("HIT");
-    private final JButton standButton = new JButton("STAND");
-    private final JButton doubleButton = new JButton("DOUBLE");
-    private final JButton splitButton = new JButton("SPLIT");
-    private final JButton cheatButton = new JButton("CHEAT");
-    private final JButton duelButton = new JButton("DRAW");
-    private final JButton resetButton = new JButton("RESET SAVE");
+    private final JButton dealButton = new JButton("Deal");
+    private final JButton hitButton = new JButton("Hit");
+    private final JButton standButton = new JButton("Stand");
+    private final JButton doubleButton = new JButton("Double");
+    private final JButton splitButton = new JButton("Split");
+    private final JButton cheatButton = new JButton("Cheat");
+    private final JButton duelButton = new JButton("Draw");
+    private final JButton resetButton = new JButton("Reset");
+    private final TableCanvas tableCanvas = new TableCanvas();
 
     private Timer typeTimer;
     private Timer duelTimer;
     private Timer loadingOverlayTimer;
-    private String fullEventText = "";
-    private int typeIndex;
     private Point baseLocation;
     private boolean musicStarted;
     private boolean duelSequenceQueued;
     private float loadingOverlayAlpha = 1f;
     private float loadingTextPulse;
+    private GameSnapshot currentSnapshot;
+    private List<String> narrativePages = List.of("");
+    private int narrativePageIndex;
+    private String currentPageText = "";
+    private int currentCharIndex;
+    private boolean narrativeAwaitingContinue;
 
     public GamePanel(GameController controller, JFrame frame) {
         this.controller = controller;
@@ -84,108 +95,101 @@ public class GamePanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
         setBackground(BACKDROP);
 
-        titleLabel.setFont(new Font("Monospaced", Font.BOLD, 30));
-        titleLabel.setForeground(ACCENT);
+        titleLabel.setFont(new Font("Dialog", Font.BOLD, 34));
+        titleLabel.setForeground(CREAM);
         add(titleLabel, BorderLayout.NORTH);
 
-        add(buildTablePanel(), BorderLayout.CENTER);
-        add(buildSidebarPanel(), BorderLayout.EAST);
+        tableCanvas.setPreferredSize(new Dimension(700, 650));
+        add(tableCanvas, BorderLayout.CENTER);
+        add(buildSidebar(), BorderLayout.EAST);
     }
 
-    private JPanel buildTablePanel() {
-        JPanel table = styledPanel();
-        table.setBackground(FELT);
-        table.setLayout(new BorderLayout(12, 12));
-
-        JPanel header = new JPanel();
-        header.setOpaque(false);
-        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
-        opponentLabel.setForeground(DUST);
-        opponentLabel.setFont(new Font("Monospaced", Font.BOLD, 22));
-        dealerLabel.setForeground(DUST);
-        dealerLabel.setFont(new Font("Monospaced", Font.PLAIN, 19));
-        dealerValueLabel.setForeground(ACCENT);
-        dealerValueLabel.setFont(new Font("Monospaced", Font.BOLD, 17));
-        header.add(opponentLabel);
-        header.add(Box.createVerticalStrut(8));
-        header.add(dealerLabel);
-        header.add(dealerValueLabel);
-
-        handsPanel.setOpaque(false);
-        handsPanel.setLayout(new GridLayout(0, 1, 0, 10));
-
-        table.add(header, BorderLayout.NORTH);
-        table.add(handsPanel, BorderLayout.CENTER);
-        return table;
-    }
-
-    private JPanel buildSidebarPanel() {
-        JPanel sidebar = styledPanel();
+    private JPanel buildSidebar() {
+        JPanel sidebar = new JPanel();
         sidebar.setPreferredSize(new Dimension(320, 680));
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+        sidebar.setBackground(new Color(60, 41, 29));
+        sidebar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(GOLD, 3),
+            BorderFactory.createEmptyBorder(16, 16, 16, 16)
+        ));
 
-        statusLabel.setForeground(ACCENT);
-        statusLabel.setFont(new Font("Monospaced", Font.BOLD, 16));
+        opponentLabel.setForeground(GOLD);
+        opponentLabel.setFont(new Font("Dialog", Font.BOLD, 22));
+        opponentLabel.setAlignmentX(LEFT_ALIGNMENT);
+
+        statusLabel.setForeground(CREAM);
+        statusLabel.setFont(new Font("Dialog", Font.BOLD, 15));
         statusLabel.setAlignmentX(LEFT_ALIGNMENT);
 
         eventArea.setEditable(false);
         eventArea.setLineWrap(true);
         eventArea.setWrapStyleWord(true);
-        eventArea.setForeground(DUST);
-        eventArea.setBackground(BACKDROP);
-        eventArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-        eventArea.setMargin(new Insets(10, 10, 10, 10));
-        JScrollPane eventScroll = new JScrollPane(eventArea);
-        eventScroll.setAlignmentX(LEFT_ALIGNMENT);
-        eventScroll.setPreferredSize(new Dimension(280, 180));
-        eventScroll.setMaximumSize(new Dimension(280, 180));
-        eventScroll.setBorder(BorderFactory.createLineBorder(ACCENT, 2));
+        eventArea.setForeground(CREAM);
+        eventArea.setBackground(new Color(31, 23, 18));
+        eventArea.setFont(new Font("Dialog", Font.PLAIN, 15));
+        eventArea.setMargin(new Insets(12, 12, 12, 12));
+        eventArea.setBorder(BorderFactory.createEmptyBorder());
+        JScrollPane storyPane = new JScrollPane(eventArea);
+        storyPane.setAlignmentX(LEFT_ALIGNMENT);
+        storyPane.setPreferredSize(new Dimension(280, 220));
+        storyPane.setMaximumSize(new Dimension(280, 220));
+        storyPane.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(WOOD, 2),
+            BorderFactory.createEmptyBorder(4, 4, 4, 4)
+        ));
 
-        bankrollLabel.setForeground(DUST);
-        streakLabel.setForeground(DUST);
-        recordLabel.setForeground(DUST);
-        shoeLabel.setForeground(DUST);
-        for (JLabel label : new JLabel[]{bankrollLabel, streakLabel, recordLabel, shoeLabel}) {
-            label.setFont(new Font("Monospaced", Font.BOLD, 14));
+        bankrollLabel.setForeground(CREAM);
+        potLabel.setForeground(CREAM);
+        recordLabel.setForeground(CREAM);
+        shoeLabel.setForeground(CREAM);
+        for (JLabel label : new JLabel[]{bankrollLabel, potLabel, recordLabel, shoeLabel}) {
+            label.setFont(new Font("Dialog", Font.BOLD, 15));
             label.setAlignmentX(LEFT_ALIGNMENT);
         }
 
         suspicionBar.setForeground(DANGER);
-        suspicionBar.setBackground(BACKDROP);
+        suspicionBar.setBackground(new Color(34, 27, 20));
         suspicionBar.setStringPainted(true);
-        suspicionBar.setFont(new Font("Monospaced", Font.BOLD, 12));
+        suspicionBar.setFont(new Font("Dialog", Font.BOLD, 12));
         suspicionBar.setAlignmentX(LEFT_ALIGNMENT);
+        suspicionBar.setBorder(BorderFactory.createLineBorder(GOLD, 1));
 
-        betField.setMaximumSize(new Dimension(280, 32));
-        betField.setFont(new Font("Monospaced", Font.BOLD, 14));
+        betField.setMaximumSize(new Dimension(280, 34));
+        betField.setFont(new Font("Dialog", Font.BOLD, 16));
+        betField.setBackground(new Color(248, 239, 225));
+        betField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(WOOD, 2),
+            BorderFactory.createEmptyBorder(5, 8, 5, 8)
+        ));
 
         JPanel buttonGrid = new JPanel(new GridLayout(4, 2, 8, 8));
         buttonGrid.setOpaque(false);
         buttonGrid.setAlignmentX(LEFT_ALIGNMENT);
-        JButton[] buttons = {
+        for (JButton button : new JButton[]{
             dealButton, hitButton, standButton, doubleButton,
             splitButton, cheatButton, duelButton, resetButton
-        };
-        for (JButton button : buttons) {
-            styleButton(button, button == cheatButton || button == duelButton ? DANGER : PANEL);
+        }) {
+            styleButton(button);
             buttonGrid.add(button);
         }
 
-        sidebar.add(sectionLabel("Status"));
+        sidebar.add(opponentLabel);
+        sidebar.add(Box.createVerticalStrut(8));
         sidebar.add(statusLabel);
-        sidebar.add(Box.createVerticalStrut(10));
+        sidebar.add(Box.createVerticalStrut(12));
         sidebar.add(sectionLabel("Story"));
-        sidebar.add(eventScroll);
+        sidebar.add(storyPane);
         sidebar.add(Box.createVerticalStrut(12));
         sidebar.add(sectionLabel("Table"));
         sidebar.add(bankrollLabel);
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(streakLabel);
-        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(Box.createVerticalStrut(5));
+        sidebar.add(potLabel);
+        sidebar.add(Box.createVerticalStrut(5));
         sidebar.add(recordLabel);
-        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(Box.createVerticalStrut(5));
         sidebar.add(shoeLabel);
-        sidebar.add(Box.createVerticalStrut(8));
+        sidebar.add(Box.createVerticalStrut(10));
         sidebar.add(sectionLabel("Suspicion"));
         sidebar.add(suspicionBar);
         sidebar.add(Box.createVerticalStrut(12));
@@ -196,31 +200,23 @@ public class GamePanel extends JPanel {
         return sidebar;
     }
 
-    private JPanel styledPanel() {
-        JPanel panel = new JPanel();
-        panel.setOpaque(true);
-        panel.setBackground(PANEL);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(ACCENT, 3),
-            BorderFactory.createEmptyBorder(14, 14, 14, 14)
-        ));
-        return panel;
-    }
-
     private JLabel sectionLabel(String text) {
         JLabel label = new JLabel(text);
-        label.setForeground(ACCENT);
-        label.setFont(new Font("Monospaced", Font.BOLD, 15));
+        label.setForeground(GOLD);
+        label.setFont(new Font("Dialog", Font.BOLD, 15));
         label.setAlignmentX(LEFT_ALIGNMENT);
         return label;
     }
 
-    private void styleButton(JButton button, Color color) {
-        button.setBackground(color);
-        button.setForeground(DUST);
+    private void styleButton(JButton button) {
+        button.setBackground(new Color(90, 62, 37));
+        button.setForeground(CREAM);
         button.setFocusPainted(false);
-        button.setFont(new Font("Monospaced", Font.BOLD, 13));
-        button.setBorder(BorderFactory.createLineBorder(ACCENT, 2));
+        button.setFont(new Font("Dialog", Font.BOLD, 14));
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(GOLD, 2),
+            BorderFactory.createEmptyBorder(7, 8, 7, 8)
+        ));
     }
 
     private void bindActions() {
@@ -260,6 +256,27 @@ public class GamePanel extends JPanel {
         });
     }
 
+    public boolean hasPendingNarrative() {
+        return typeTimer != null && typeTimer.isRunning()
+            || narrativeAwaitingContinue
+            || narrativePageIndex < narrativePages.size() - 1;
+    }
+
+    public void advanceNarrative() {
+        if (typeTimer != null && typeTimer.isRunning()) {
+            typeTimer.stop();
+            eventArea.setText(currentPageText);
+            narrativeAwaitingContinue = true;
+            updateContinuePrompt();
+            return;
+        }
+
+        if (narrativePageIndex < narrativePages.size() - 1) {
+            narrativePageIndex++;
+            typePage(narrativePages.get(narrativePageIndex));
+        }
+    }
+
     public void fireDuelDraw() {
         controller.drawDuel();
         refresh(true);
@@ -271,56 +288,138 @@ public class GamePanel extends JPanel {
             musicStarted = true;
         }
 
-        GameSnapshot snapshot = controller.getSnapshot();
-        opponentLabel.setText("Opponent: " + snapshot.opponentName());
-        dealerLabel.setText("Dealer: " + snapshot.dealerCards());
-        dealerValueLabel.setText(snapshot.roundActive()
-            ? "Dealer showing: " + snapshot.dealerVisibleValue()
-            : "Dealer value: " + snapshot.dealerFinalValue());
+        currentSnapshot = controller.getSnapshot();
+        opponentLabel.setText(currentSnapshot.opponentName());
+        statusLabel.setText("<html><body style='width:270px'>" + currentSnapshot.statusText().replace("\n", "<br>") + "</body></html>");
 
-        bankrollLabel.setText("Bankroll: $" + snapshot.bankroll());
-        streakLabel.setText("Streak: " + snapshot.streak() + "   Best: " + snapshot.bestStreak());
-        recordLabel.setText("Record: " + snapshot.wins() + " - " + snapshot.losses());
-        shoeLabel.setText("Cards in shoe: " + snapshot.shoeCards());
-        suspicionBar.setValue(snapshot.suspicion());
-        suspicionBar.setString(snapshot.suspicion() + "%");
+        bankrollLabel.setText("Bankroll: $" + currentSnapshot.bankroll());
+        potLabel.setText("Pot: $" + currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum());
+        recordLabel.setText("Record: " + currentSnapshot.wins() + " - " + currentSnapshot.losses() + "   Best streak: " + currentSnapshot.bestStreak());
+        shoeLabel.setText("Cards left in shoe: " + currentSnapshot.shoeCards());
+        suspicionBar.setValue(currentSnapshot.suspicion());
+        suspicionBar.setString(currentSnapshot.suspicion() + "%");
 
-        String status = snapshot.statusText().replace("\n", " | ");
-        statusLabel.setText("<html><body style='width:260px'>" + status + "</body></html>");
         if (animateText) {
-            typewrite(snapshot.eventText());
+            prepareNarrative(currentSnapshot.eventText());
         } else {
-            eventArea.setText(snapshot.eventText());
+            eventArea.setText(currentSnapshot.eventText());
+            narrativePages = List.of(currentSnapshot.eventText());
+            narrativePageIndex = 0;
+            currentPageText = currentSnapshot.eventText();
+            narrativeAwaitingContinue = false;
         }
 
-        renderHands(snapshot);
+        dealButton.setEnabled(currentSnapshot.canDeal());
+        hitButton.setEnabled(currentSnapshot.canHit());
+        standButton.setEnabled(currentSnapshot.canStand());
+        doubleButton.setEnabled(currentSnapshot.canDouble());
+        splitButton.setEnabled(currentSnapshot.canSplit());
+        cheatButton.setEnabled(currentSnapshot.canCheat());
+        duelButton.setEnabled(currentSnapshot.duelActive());
 
-        dealButton.setEnabled(snapshot.canDeal());
-        hitButton.setEnabled(snapshot.canHit());
-        standButton.setEnabled(snapshot.canStand());
-        doubleButton.setEnabled(snapshot.canDouble());
-        splitButton.setEnabled(snapshot.canSplit());
-        cheatButton.setEnabled(snapshot.canCheat());
-        duelButton.setEnabled(snapshot.duelActive());
-
-        if (snapshot.duelActive() && !snapshot.duelCanDraw() && !duelSequenceQueued) {
+        if (currentSnapshot.duelActive() && !currentSnapshot.duelCanDraw() && !duelSequenceQueued) {
             duelSequenceQueued = true;
             soundManager.playEffect("glass-break.wav");
             shakeFrame();
             beginDuelTimer();
         }
-        if (snapshot.duelCanDraw()) {
+        if (currentSnapshot.duelCanDraw()) {
             duelSequenceQueued = false;
             stopDuelTimer();
             soundManager.playEffect("glass-break.wav");
         }
-        if (!snapshot.duelActive()) {
+        if (!currentSnapshot.duelActive()) {
             duelSequenceQueued = false;
             stopDuelTimer();
         }
 
+        tableCanvas.repaint();
         revalidate();
         repaint();
+    }
+
+    private void prepareNarrative(String text) {
+        narrativePages = splitNarrative(text);
+        narrativePageIndex = 0;
+        typePage(narrativePages.get(0));
+    }
+
+    private List<String> splitNarrative(String text) {
+        String normalized = text == null ? "" : text.trim();
+        if (normalized.isEmpty()) {
+            return List.of("");
+        }
+
+        List<String> pages = new ArrayList<>();
+        String[] paragraphs = normalized.split("\\n+");
+        StringBuilder page = new StringBuilder();
+        for (String paragraph : paragraphs) {
+            String part = paragraph.trim();
+            if (part.isEmpty()) {
+                continue;
+            }
+            if (page.length() + part.length() > 120 && page.length() > 0) {
+                pages.add(page.toString().trim());
+                page.setLength(0);
+            }
+            if (page.length() > 0) {
+                page.append("\n\n");
+            }
+            page.append(part);
+        }
+        if (page.length() > 0) {
+            pages.add(page.toString().trim());
+        }
+        return pages.isEmpty() ? List.of(normalized) : pages;
+    }
+
+    private void typePage(String pageText) {
+        currentPageText = pageText;
+        currentCharIndex = 0;
+        narrativeAwaitingContinue = false;
+        eventArea.setText("");
+        if (typeTimer != null) {
+            typeTimer.stop();
+        }
+        typeTimer = new Timer(34, event -> {
+            if (currentCharIndex >= currentPageText.length()) {
+                typeTimer.stop();
+                narrativeAwaitingContinue = true;
+                updateContinuePrompt();
+                return;
+            }
+            char next = currentPageText.charAt(currentCharIndex);
+            eventArea.append(String.valueOf(next));
+            if (!Character.isWhitespace(next) && currentCharIndex % 3 == 0) {
+                soundManager.playVoiceSnippet("Papyrus Dialogue Sound Effect");
+            }
+            currentCharIndex++;
+        });
+        typeTimer.start();
+    }
+
+    private void updateContinuePrompt() {
+        String prompt = narrativePageIndex < narrativePages.size() - 1
+            ? "\n\n[Press SPACE to continue]"
+            : "";
+        eventArea.setText(currentPageText + prompt);
+    }
+
+    private int parseBet() {
+        try {
+            return Integer.parseInt(betField.getText().trim());
+        } catch (NumberFormatException exception) {
+            return 10;
+        }
+    }
+
+    @Override
+    protected void paintComponent(Graphics graphics) {
+        super.paintComponent(graphics);
+        Graphics2D g2 = (Graphics2D) graphics.create();
+        g2.setColor(BACKDROP);
+        g2.fillRect(0, 0, getWidth(), getHeight());
+        g2.dispose();
     }
 
     @Override
@@ -333,94 +432,23 @@ public class GamePanel extends JPanel {
 
         Graphics2D g2 = (Graphics2D) graphics.create();
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
-        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-
-        float overlayAlpha = Math.max(0f, Math.min(1f, loadingOverlayAlpha));
-        g2.setComposite(AlphaComposite.SrcOver.derive(overlayAlpha));
+        g2.setComposite(AlphaComposite.SrcOver.derive(Math.max(0f, Math.min(1f, loadingOverlayAlpha))));
         g2.setColor(Color.BLACK);
         g2.fillRect(0, 0, getWidth(), getHeight());
 
-        float pulseAlpha = Math.max(0.35f, Math.min(1f, 0.65f + (float) Math.sin(loadingTextPulse) * 0.25f));
-        g2.setComposite(AlphaComposite.SrcOver.derive(Math.min(1f, overlayAlpha * pulseAlpha)));
-        g2.setColor(ACCENT);
-        g2.setFont(new Font("Monospaced", Font.BOLD, 36));
-
+        float pulse = Math.max(0.35f, Math.min(1f, 0.65f + (float) Math.sin(loadingTextPulse) * 0.25f));
+        g2.setComposite(AlphaComposite.SrcOver.derive(pulse));
+        g2.setColor(CREAM);
+        g2.setFont(new Font("Monospaced", Font.BOLD, 38));
         String title = "DON'T GAMBLE";
+        int centerY = getHeight() / 2 - 24;
         int titleWidth = g2.getFontMetrics().stringWidth(title);
-        int centerY = getHeight() / 2 - 18;
         g2.drawString(title, (getWidth() - titleWidth) / 2, centerY);
-
-        g2.setFont(new Font("Monospaced", Font.PLAIN, 16));
-        String lineOne = "FAKE MONEY. REAL CONSEQUENCES.";
-        String lineTwo = "THE SALOON OPENS SOON.";
-        int lineOneWidth = g2.getFontMetrics().stringWidth(lineOne);
-        int lineTwoWidth = g2.getFontMetrics().stringWidth(lineTwo);
-        g2.drawString(lineOne, (getWidth() - lineOneWidth) / 2, centerY + 42);
-        g2.drawString(lineTwo, (getWidth() - lineTwoWidth) / 2, centerY + 70);
+        g2.setFont(new Font("Monospaced", Font.BOLD, 15));
+        String line = "FAKE MONEY. REAL CONSEQUENCES.";
+        int lineWidth = g2.getFontMetrics().stringWidth(line);
+        g2.drawString(line, (getWidth() - lineWidth) / 2, centerY + 42);
         g2.dispose();
-    }
-
-    private void renderHands(GameSnapshot snapshot) {
-        handsPanel.removeAll();
-        for (int i = 0; i < snapshot.playerHands().size(); i++) {
-            int bet = i < snapshot.handBets().size() ? snapshot.handBets().get(i) : 0;
-            JPanel handPanel = new JPanel(new BorderLayout());
-            handPanel.setOpaque(true);
-            handPanel.setBackground(i == snapshot.activeHandIndex() && snapshot.roundActive()
-                ? new Color(74, 32, 19)
-                : new Color(57, 37, 23));
-            handPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(i == snapshot.activeHandIndex() ? ACCENT : DUST, 2),
-                BorderFactory.createEmptyBorder(10, 10, 10, 10)
-            ));
-
-            JLabel title = new JLabel("Hand " + (i + 1) + "   Bet $" + bet);
-            title.setForeground(ACCENT);
-            title.setFont(new Font("Monospaced", Font.BOLD, 16));
-
-            JLabel cards = new JLabel(snapshot.playerHands().get(i));
-            cards.setForeground(DUST);
-            cards.setFont(new Font("Monospaced", Font.BOLD, 20));
-
-            JLabel value = new JLabel("Value: " + snapshot.playerValues().get(i));
-            value.setForeground(DUST);
-            value.setFont(new Font("Monospaced", Font.PLAIN, 14));
-
-            handPanel.add(title, BorderLayout.NORTH);
-            handPanel.add(cards, BorderLayout.CENTER);
-            handPanel.add(value, BorderLayout.SOUTH);
-            handsPanel.add(handPanel);
-        }
-    }
-
-    private int parseBet() {
-        try {
-            return Integer.parseInt(betField.getText().trim());
-        } catch (NumberFormatException exception) {
-            return 10;
-        }
-    }
-
-    private void typewrite(String text) {
-        fullEventText = text;
-        typeIndex = 0;
-        eventArea.setText("");
-        if (typeTimer != null) {
-            typeTimer.stop();
-        }
-        typeTimer = new Timer(18, event -> {
-            if (typeIndex >= fullEventText.length()) {
-                typeTimer.stop();
-                return;
-            }
-            char next = fullEventText.charAt(typeIndex);
-            eventArea.append(String.valueOf(next));
-            if (!Character.isWhitespace(next) && typeIndex % 3 == 0) {
-                soundManager.playEffect("typewriter.wav");
-            }
-            typeIndex++;
-        });
-        typeTimer.start();
     }
 
     private void beginDuelTimer() {
@@ -454,9 +482,7 @@ public class GamePanel extends JPanel {
                 shake.stop();
                 return;
             }
-            int offsetX = random.nextInt(13) - 6;
-            int offsetY = random.nextInt(9) - 4;
-            frame.setLocation(anchor.x + offsetX, anchor.y + offsetY);
+            frame.setLocation(anchor.x + random.nextInt(13) - 6, anchor.y + random.nextInt(9) - 4);
             shakes[0]++;
         });
         shake.start();
@@ -477,5 +503,121 @@ public class GamePanel extends JPanel {
             repaint();
         });
         loadingOverlayTimer.start();
+    }
+
+    private class TableCanvas extends JPanel {
+        TableCanvas() {
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            if (currentSnapshot == null) {
+                return;
+            }
+
+            Graphics2D g2 = (Graphics2D) graphics.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int width = getWidth();
+            int height = getHeight();
+
+            g2.setColor(new Color(93, 60, 34));
+            g2.fillRoundRect(10, 16, width - 20, height - 32, 36, 36);
+            g2.setColor(FELT_DARK);
+            g2.fillRoundRect(24, 30, width - 48, height - 60, 28, 28);
+
+            Arc2D halfCircle = new Arc2D.Double(70, 60, width - 140, height - 150, 0, 180, Arc2D.OPEN);
+            g2.setStroke(new BasicStroke(4f));
+            g2.setColor(GOLD);
+            g2.draw(halfCircle);
+
+            drawDealer(g2, width);
+            drawDealerCards(g2, width);
+            drawPot(g2, width, height);
+            drawPlayerArea(g2, width, height);
+            g2.dispose();
+        }
+
+        private void drawDealer(Graphics2D g2, int width) {
+            int centerX = width / 2;
+            g2.setColor(new Color(63, 40, 27));
+            g2.fill(new Ellipse2D.Double(centerX - 24, 80, 48, 48));
+            g2.fillRoundRect(centerX - 40, 120, 80, 70, 18, 18);
+            g2.setColor(CREAM);
+            g2.setFont(new Font("Dialog", Font.BOLD, 18));
+            String name = "Dealer";
+            int nameWidth = g2.getFontMetrics().stringWidth(name);
+            g2.drawString(name, centerX - nameWidth / 2, 215);
+        }
+
+        private void drawDealerCards(Graphics2D g2, int width) {
+            g2.setColor(CREAM);
+            g2.setFont(new Font("Monospaced", Font.BOLD, 20));
+            String cards = currentSnapshot.dealerCards();
+            int cardsWidth = g2.getFontMetrics().stringWidth(cards);
+            g2.drawString(cards, width / 2 - cardsWidth / 2, 255);
+
+            g2.setFont(new Font("Dialog", Font.BOLD, 15));
+            String value = currentSnapshot.roundActive()
+                ? "Showing " + currentSnapshot.dealerVisibleValue()
+                : "Value " + currentSnapshot.dealerFinalValue();
+            int valueWidth = g2.getFontMetrics().stringWidth(value);
+            g2.drawString(value, width / 2 - valueWidth / 2, 280);
+        }
+
+        private void drawPot(Graphics2D g2, int width, int height) {
+            int pot = currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum();
+            int centerX = width / 2;
+            int centerY = height / 2 + 10;
+
+            g2.setColor(GOLD);
+            g2.setFont(new Font("Dialog", Font.BOLD, 20));
+            String potText = "Pot: $" + pot;
+            int potWidth = g2.getFontMetrics().stringWidth(potText);
+            g2.drawString(potText, centerX - potWidth / 2, centerY - 10);
+
+            drawChipStack(g2, centerX - 55, centerY + 16, CHIP_RED);
+            drawChipStack(g2, centerX - 15, centerY + 8, CHIP_WHITE);
+            drawChipStack(g2, centerX + 25, centerY + 16, CHIP_BLUE);
+        }
+
+        private void drawChipStack(Graphics2D g2, int x, int y, Color color) {
+            for (int i = 0; i < 4; i++) {
+                int yy = y - i * 8;
+                g2.setColor(color);
+                g2.fillOval(x, yy, 34, 14);
+                g2.setColor(CREAM);
+                g2.drawOval(x, yy, 34, 14);
+            }
+        }
+
+        private void drawPlayerArea(Graphics2D g2, int width, int height) {
+            List<String> hands = currentSnapshot.playerHands();
+            int areaY = height - 145;
+            int spacing = hands.size() == 1 ? 0 : 190;
+            int startX = width / 2 - (hands.size() - 1) * spacing / 2;
+
+            for (int i = 0; i < hands.size(); i++) {
+                boolean active = i == currentSnapshot.activeHandIndex() && currentSnapshot.roundActive();
+                int x = startX + i * spacing;
+                int bet = i < currentSnapshot.handBets().size() ? currentSnapshot.handBets().get(i) : 0;
+
+                g2.setColor(active ? new Color(255, 228, 164) : new Color(232, 222, 201));
+                g2.fillRoundRect(x - 90, areaY - 10, 180, 84, 20, 20);
+                g2.setColor(active ? GOLD : WOOD);
+                g2.setStroke(new BasicStroke(3f));
+                g2.drawRoundRect(x - 90, areaY - 10, 180, 84, 20, 20);
+
+                g2.setColor(new Color(54, 35, 24));
+                g2.setFont(new Font("Dialog", Font.BOLD, 14));
+                g2.drawString("Hand " + (i + 1) + "  Bet $" + bet, x - 72, areaY + 12);
+                g2.setFont(new Font("Monospaced", Font.BOLD, 22));
+                g2.drawString(hands.get(i), x - 72, areaY + 42);
+                g2.setFont(new Font("Dialog", Font.BOLD, 14));
+                g2.drawString("Value " + currentSnapshot.playerValues().get(i), x - 72, areaY + 64);
+            }
+        }
     }
 }
