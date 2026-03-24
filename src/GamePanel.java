@@ -1,10 +1,14 @@
+import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Point;
+import java.awt.RenderingHints;
 import java.util.Random;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -54,21 +58,24 @@ public class GamePanel extends JPanel {
     private final JButton cheatButton = new JButton("CHEAT");
     private final JButton duelButton = new JButton("DRAW");
     private final JButton resetButton = new JButton("RESET SAVE");
-    private final JLabel loadingLabel = new JLabel("DON'T GAMBLE", SwingConstants.CENTER);
 
     private Timer typeTimer;
     private Timer duelTimer;
+    private Timer loadingOverlayTimer;
     private String fullEventText = "";
     private int typeIndex;
     private Point baseLocation;
     private boolean musicStarted;
     private boolean duelSequenceQueued;
+    private float loadingOverlayAlpha = 1f;
+    private float loadingTextPulse;
 
     public GamePanel(GameController controller, JFrame frame) {
         this.controller = controller;
         this.frame = frame;
         buildUi();
         bindActions();
+        startLoadingOverlayTimer();
         refresh(false);
     }
 
@@ -83,16 +90,6 @@ public class GamePanel extends JPanel {
 
         add(buildTablePanel(), BorderLayout.CENTER);
         add(buildSidebarPanel(), BorderLayout.EAST);
-
-        loadingLabel.setOpaque(true);
-        loadingLabel.setBackground(new Color(18, 10, 5, 220));
-        loadingLabel.setForeground(ACCENT);
-        loadingLabel.setFont(new Font("Monospaced", Font.BOLD, 28));
-        loadingLabel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(ACCENT, 4),
-            BorderFactory.createEmptyBorder(16, 18, 16, 18)
-        ));
-        add(loadingLabel, BorderLayout.SOUTH);
     }
 
     private JPanel buildTablePanel() {
@@ -270,12 +267,11 @@ public class GamePanel extends JPanel {
 
     public void refresh(boolean animateText) {
         if (!musicStarted) {
-            soundManager.loopMusic("a_quiet_time.wav");
+            soundManager.loopMusic("quiet time.wav");
             musicStarted = true;
         }
 
         GameSnapshot snapshot = controller.getSnapshot();
-        loadingLabel.setVisible(snapshot.showLoading());
         opponentLabel.setText("Opponent: " + snapshot.opponentName());
         dealerLabel.setText("Dealer: " + snapshot.dealerCards());
         dealerValueLabel.setText(snapshot.roundActive()
@@ -325,6 +321,43 @@ public class GamePanel extends JPanel {
 
         revalidate();
         repaint();
+    }
+
+    @Override
+    public void paint(Graphics graphics) {
+        super.paint(graphics);
+
+        if (loadingOverlayAlpha <= 0f) {
+            return;
+        }
+
+        Graphics2D g2 = (Graphics2D) graphics.create();
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+        float overlayAlpha = Math.max(0f, Math.min(1f, loadingOverlayAlpha));
+        g2.setComposite(AlphaComposite.SrcOver.derive(overlayAlpha));
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, getWidth(), getHeight());
+
+        float pulseAlpha = Math.max(0.35f, Math.min(1f, 0.65f + (float) Math.sin(loadingTextPulse) * 0.25f));
+        g2.setComposite(AlphaComposite.SrcOver.derive(Math.min(1f, overlayAlpha * pulseAlpha)));
+        g2.setColor(ACCENT);
+        g2.setFont(new Font("Monospaced", Font.BOLD, 36));
+
+        String title = "DON'T GAMBLE";
+        int titleWidth = g2.getFontMetrics().stringWidth(title);
+        int centerY = getHeight() / 2 - 18;
+        g2.drawString(title, (getWidth() - titleWidth) / 2, centerY);
+
+        g2.setFont(new Font("Monospaced", Font.PLAIN, 16));
+        String lineOne = "FAKE MONEY. REAL CONSEQUENCES.";
+        String lineTwo = "THE SALOON OPENS SOON.";
+        int lineOneWidth = g2.getFontMetrics().stringWidth(lineOne);
+        int lineTwoWidth = g2.getFontMetrics().stringWidth(lineTwo);
+        g2.drawString(lineOne, (getWidth() - lineOneWidth) / 2, centerY + 42);
+        g2.drawString(lineTwo, (getWidth() - lineTwoWidth) / 2, centerY + 70);
+        g2.dispose();
     }
 
     private void renderHands(GameSnapshot snapshot) {
@@ -427,5 +460,22 @@ public class GamePanel extends JPanel {
             shakes[0]++;
         });
         shake.start();
+    }
+
+    private void startLoadingOverlayTimer() {
+        loadingOverlayTimer = new Timer(33, event -> {
+            boolean stillLoading = controller.getSnapshot().showLoading();
+            if (stillLoading) {
+                loadingOverlayAlpha = 0.86f + 0.14f * (float) ((Math.sin(loadingTextPulse) + 1.0) / 2.0);
+                loadingTextPulse += 0.16f;
+            } else if (loadingOverlayAlpha > 0f) {
+                loadingOverlayAlpha = Math.max(0f, loadingOverlayAlpha - 0.05f);
+                loadingTextPulse += 0.10f;
+            } else {
+                loadingOverlayTimer.stop();
+            }
+            repaint();
+        });
+        loadingOverlayTimer.start();
     }
 }

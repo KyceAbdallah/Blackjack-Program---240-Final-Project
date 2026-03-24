@@ -29,7 +29,7 @@ public class GameFrame extends JFrame {
             }
         });
 
-        Timer bootTimer = new Timer(2400, event -> {
+        Timer bootTimer = new Timer(4200, event -> {
             controller.finishLoading();
             panel.refresh(true);
         });

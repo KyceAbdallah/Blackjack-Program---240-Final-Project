@@ -1,8 +1,12 @@
 import java.awt.Toolkit;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
@@ -41,7 +45,7 @@ public class SoundManager {
     }
 
     private Clip loadClip(String fileName) {
-        Path path = ASSET_DIR.resolve(fileName);
+        Path path = resolveAudioPath(fileName);
         if (!Files.exists(path)) {
             return null;
         }
@@ -52,5 +56,48 @@ public class SoundManager {
         } catch (Exception exception) {
             return null;
         }
+    }
+
+    private Path resolveAudioPath(String fileName) {
+        List<Path> directCandidates = List.of(
+            ASSET_DIR.resolve(fileName),
+            Path.of(fileName)
+        );
+        for (Path candidate : directCandidates) {
+            if (Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+
+        String normalizedTarget = normalize(fileName);
+        List<Path> directories = new ArrayList<>();
+        directories.add(ASSET_DIR);
+        directories.add(Path.of("."));
+
+        for (Path directory : directories) {
+            if (!Files.isDirectory(directory)) {
+                continue;
+            }
+            try (Stream<Path> files = Files.list(directory)) {
+                Path match = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> normalize(path.getFileName().toString()).contains(normalizedTarget))
+                    .findFirst()
+                    .orElse(null);
+                if (match != null) {
+                    return match;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+
+        return ASSET_DIR.resolve(fileName);
+    }
+
+    private String normalize(String value) {
+        return value.toLowerCase()
+            .replace(".wav", "")
+            .replaceAll("[^a-z0-9]+", " ")
+            .trim();
     }
 }
