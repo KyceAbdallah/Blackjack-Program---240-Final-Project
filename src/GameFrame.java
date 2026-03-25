@@ -12,8 +12,9 @@ public class GameFrame extends JFrame {
         controller = new GameController();
         setTitle("Blackjack Saloon");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setPreferredSize(new Dimension(1040, 780));
-        setResizable(false);
+        setPreferredSize(new Dimension(1360, 900));
+        setMinimumSize(new Dimension(1240, 820));
+        setResizable(true);
 
         panel = new GamePanel(controller, this);
         setContentPane(panel);

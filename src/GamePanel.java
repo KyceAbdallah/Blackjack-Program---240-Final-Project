@@ -2,8 +2,10 @@ import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
@@ -12,6 +14,7 @@ import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -21,49 +24,58 @@ import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
 public class GamePanel extends JPanel {
-    private static final Color BACKDROP = new Color(44, 30, 20);
-    private static final Color FELT = new Color(28, 101, 71);
-    private static final Color FELT_DARK = new Color(15, 62, 43);
-    private static final Color WOOD = new Color(113, 73, 43);
-    private static final Color GOLD = new Color(239, 201, 104);
-    private static final Color CREAM = new Color(247, 236, 213);
-    private static final Color CHIP_RED = new Color(181, 58, 48);
-    private static final Color CHIP_BLUE = new Color(57, 94, 186);
-    private static final Color CHIP_WHITE = new Color(236, 236, 231);
-    private static final Color DANGER = new Color(189, 70, 47);
+    private static final Color BACKDROP_TOP = new Color(15, 22, 36);
+    private static final Color BACKDROP_BOTTOM = new Color(47, 19, 27);
+    private static final Color PANEL = new Color(19, 24, 36);
+    private static final Color PANEL_ALT = new Color(31, 21, 31);
+    private static final Color GOLD = new Color(231, 194, 105);
+    private static final Color CREAM = new Color(247, 239, 226);
+    private static final Color MUTED = new Color(187, 173, 155);
+    private static final Color TABLE_EDGE = new Color(108, 62, 34);
+    private static final Color TABLE_TOP = new Color(17, 79, 64);
+    private static final Color TABLE_BOTTOM = new Color(8, 43, 36);
+    private static final Color DANGER = new Color(203, 85, 64);
 
     private final GameController controller;
     private final JFrame frame;
     private final Random random = new Random();
     private final SoundManager soundManager = new SoundManager();
 
-    private final JLabel titleLabel = new JLabel("BLACKJACK SALOON", SwingConstants.CENTER);
+    private final JLabel titleLabel = new JLabel("BLACKJACK SALOON");
+    private final JLabel subtitleLabel = new JLabel();
+    private final JLabel displayNoteLabel = new JLabel("Best experienced maximized or fullscreen.");
+    private final JLabel headerMetaLabel = new JLabel("", SwingConstants.RIGHT);
     private final JLabel opponentLabel = new JLabel();
+    private final JLabel opponentLineLabel = new JLabel();
     private final JLabel statusLabel = new JLabel();
     private final JTextArea eventArea = new JTextArea();
     private final JLabel bankrollLabel = new JLabel();
     private final JLabel potLabel = new JLabel();
     private final JLabel recordLabel = new JLabel();
+    private final JLabel streakLabel = new JLabel();
     private final JLabel shoeLabel = new JLabel();
     private final JProgressBar suspicionBar = new JProgressBar(0, 100);
     private final JTextField betField = new JTextField("25");
-    private final JButton dealButton = new JButton("Deal");
-    private final JButton hitButton = new JButton("Hit");
-    private final JButton standButton = new JButton("Stand");
+    private final JButton dealButton = new JButton("Deal In");
+    private final JButton hitButton = new JButton("Take Card");
+    private final JButton standButton = new JButton("Hold");
     private final JButton doubleButton = new JButton("Double");
     private final JButton splitButton = new JButton("Split");
     private final JButton cheatButton = new JButton("Cheat");
     private final JButton duelButton = new JButton("Draw");
     private final JButton resetButton = new JButton("Reset");
+    private final JButton tutorialButton = new JButton("How To Play");
     private final TableCanvas tableCanvas = new TableCanvas();
 
     private Timer typeTimer;
@@ -80,6 +92,7 @@ public class GamePanel extends JPanel {
     private String currentPageText = "";
     private int currentCharIndex;
     private boolean narrativeAwaitingContinue;
+    private boolean tutorialShown;
 
     public GamePanel(GameController controller, JFrame frame) {
         this.controller = controller;
@@ -91,131 +104,223 @@ public class GamePanel extends JPanel {
     }
 
     private void buildUi() {
-        setLayout(new BorderLayout(18, 18));
-        setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
-        setBackground(BACKDROP);
+        setOpaque(false);
+        setLayout(new BorderLayout(24, 24));
+        setBorder(BorderFactory.createEmptyBorder(20, 22, 22, 22));
 
-        titleLabel.setFont(new Font("Dialog", Font.BOLD, 34));
+        add(buildHeader(), BorderLayout.NORTH);
+
+        JPanel body = new JPanel(new BorderLayout(22, 0));
+        body.setOpaque(false);
+        tableCanvas.setPreferredSize(new Dimension(930, 760));
+        body.add(tableCanvas, BorderLayout.CENTER);
+        body.add(buildSidebar(), BorderLayout.EAST);
+        add(body, BorderLayout.CENTER);
+    }
+
+    private JPanel buildHeader() {
+        JPanel header = new JPanel(new BorderLayout(16, 0));
+        header.setOpaque(false);
+        header.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(228, 190, 108, 110), 1),
+            BorderFactory.createEmptyBorder(16, 18, 16, 18)
+        ));
+
+        JPanel titleBlock = new JPanel();
+        titleBlock.setOpaque(false);
+        titleBlock.setLayout(new BoxLayout(titleBlock, BoxLayout.Y_AXIS));
+
         titleLabel.setForeground(CREAM);
-        add(titleLabel, BorderLayout.NORTH);
+        titleLabel.setFont(new Font("Serif", Font.BOLD, 42));
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        tableCanvas.setPreferredSize(new Dimension(700, 650));
-        add(tableCanvas, BorderLayout.CENTER);
-        add(buildSidebar(), BorderLayout.EAST);
+        subtitleLabel.setForeground(MUTED);
+        subtitleLabel.setFont(new Font("SansSerif", Font.PLAIN, 15));
+        subtitleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        displayNoteLabel.setForeground(GOLD);
+        displayNoteLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        displayNoteLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        headerMetaLabel.setForeground(GOLD);
+        headerMetaLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+
+        titleBlock.add(titleLabel);
+        titleBlock.add(Box.createVerticalStrut(4));
+        titleBlock.add(subtitleLabel);
+        titleBlock.add(Box.createVerticalStrut(6));
+        titleBlock.add(displayNoteLabel);
+
+        header.add(titleBlock, BorderLayout.WEST);
+        header.add(headerMetaLabel, BorderLayout.EAST);
+        return header;
     }
 
     private JPanel buildSidebar() {
         JPanel sidebar = new JPanel();
-        sidebar.setPreferredSize(new Dimension(320, 680));
+        sidebar.setOpaque(false);
+        sidebar.setPreferredSize(new Dimension(360, 760));
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
-        sidebar.setBackground(new Color(60, 41, 29));
-        sidebar.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(GOLD, 3),
-            BorderFactory.createEmptyBorder(16, 16, 16, 16)
-        ));
 
-        opponentLabel.setForeground(GOLD);
-        opponentLabel.setFont(new Font("Dialog", Font.BOLD, 22));
-        opponentLabel.setAlignmentX(LEFT_ALIGNMENT);
+        JPanel opponentCard = createCardPanel(PANEL_ALT);
+        opponentLabel.setForeground(CREAM);
+        opponentLabel.setFont(new Font("Serif", Font.BOLD, 28));
+        opponentLineLabel.setForeground(MUTED);
+        opponentLineLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        statusLabel.setForeground(GOLD);
+        statusLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        opponentCard.add(sectionLabel("Opponent"));
+        opponentCard.add(Box.createVerticalStrut(10));
+        opponentCard.add(opponentLabel);
+        opponentCard.add(Box.createVerticalStrut(8));
+        opponentCard.add(opponentLineLabel);
+        opponentCard.add(Box.createVerticalStrut(12));
+        opponentCard.add(statusLabel);
 
-        statusLabel.setForeground(CREAM);
-        statusLabel.setFont(new Font("Dialog", Font.BOLD, 15));
-        statusLabel.setAlignmentX(LEFT_ALIGNMENT);
-
+        JPanel storyCard = createCardPanel(PANEL);
         eventArea.setEditable(false);
         eventArea.setLineWrap(true);
         eventArea.setWrapStyleWord(true);
         eventArea.setForeground(CREAM);
-        eventArea.setBackground(new Color(31, 23, 18));
-        eventArea.setFont(new Font("Dialog", Font.PLAIN, 15));
-        eventArea.setMargin(new Insets(12, 12, 12, 12));
-        eventArea.setBorder(BorderFactory.createEmptyBorder());
+        eventArea.setBackground(new Color(10, 14, 22));
+        eventArea.setFont(new Font("SansSerif", Font.PLAIN, 15));
+        eventArea.setMargin(new Insets(14, 14, 14, 14));
         JScrollPane storyPane = new JScrollPane(eventArea);
-        storyPane.setAlignmentX(LEFT_ALIGNMENT);
-        storyPane.setPreferredSize(new Dimension(280, 220));
-        storyPane.setMaximumSize(new Dimension(280, 220));
+        storyPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        storyPane.setPreferredSize(new Dimension(320, 180));
+        storyPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
         storyPane.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(WOOD, 2),
+            BorderFactory.createLineBorder(new Color(228, 190, 108), 1),
             BorderFactory.createEmptyBorder(4, 4, 4, 4)
         ));
+        JLabel hintLabel = new JLabel("SPACE advances story and still handles quick-draw timing.");
+        hintLabel.setForeground(MUTED);
+        hintLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        hintLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        storyCard.add(sectionLabel("Story"));
+        storyCard.add(Box.createVerticalStrut(10));
+        storyCard.add(storyPane);
+        storyCard.add(Box.createVerticalStrut(10));
+        storyCard.add(hintLabel);
 
-        bankrollLabel.setForeground(CREAM);
-        potLabel.setForeground(CREAM);
-        recordLabel.setForeground(CREAM);
-        shoeLabel.setForeground(CREAM);
-        for (JLabel label : new JLabel[]{bankrollLabel, potLabel, recordLabel, shoeLabel}) {
-            label.setFont(new Font("Dialog", Font.BOLD, 15));
-            label.setAlignmentX(LEFT_ALIGNMENT);
-        }
-
-        suspicionBar.setForeground(DANGER);
-        suspicionBar.setBackground(new Color(34, 27, 20));
-        suspicionBar.setStringPainted(true);
-        suspicionBar.setFont(new Font("Dialog", Font.BOLD, 12));
-        suspicionBar.setAlignmentX(LEFT_ALIGNMENT);
-        suspicionBar.setBorder(BorderFactory.createLineBorder(GOLD, 1));
-
-        betField.setMaximumSize(new Dimension(280, 34));
-        betField.setFont(new Font("Dialog", Font.BOLD, 16));
-        betField.setBackground(new Color(248, 239, 225));
-        betField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(WOOD, 2),
-            BorderFactory.createEmptyBorder(5, 8, 5, 8)
-        ));
-
-        JPanel buttonGrid = new JPanel(new GridLayout(4, 2, 8, 8));
-        buttonGrid.setOpaque(false);
-        buttonGrid.setAlignmentX(LEFT_ALIGNMENT);
-        for (JButton button : new JButton[]{
-            dealButton, hitButton, standButton, doubleButton,
-            splitButton, cheatButton, duelButton, resetButton
-        }) {
-            styleButton(button);
-            buttonGrid.add(button);
-        }
-
-        sidebar.add(opponentLabel);
-        sidebar.add(Box.createVerticalStrut(8));
-        sidebar.add(statusLabel);
-        sidebar.add(Box.createVerticalStrut(12));
-        sidebar.add(sectionLabel("Story"));
-        sidebar.add(storyPane);
-        sidebar.add(Box.createVerticalStrut(12));
-        sidebar.add(sectionLabel("Table"));
-        sidebar.add(bankrollLabel);
-        sidebar.add(Box.createVerticalStrut(5));
-        sidebar.add(potLabel);
-        sidebar.add(Box.createVerticalStrut(5));
-        sidebar.add(recordLabel);
-        sidebar.add(Box.createVerticalStrut(5));
-        sidebar.add(shoeLabel);
-        sidebar.add(Box.createVerticalStrut(10));
-        sidebar.add(sectionLabel("Suspicion"));
-        sidebar.add(suspicionBar);
-        sidebar.add(Box.createVerticalStrut(12));
-        sidebar.add(sectionLabel("Bet"));
-        sidebar.add(betField);
-        sidebar.add(Box.createVerticalStrut(12));
-        sidebar.add(buttonGrid);
+        JPanel statsCard = createCardPanel(PANEL);
+        statsCard.add(sectionLabel("Table Readout"));
+        statsCard.add(Box.createVerticalStrut(10));
+        sidebar.add(opponentCard);
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(storyCard);
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(statsCard);
+        finishSidebar(statsCard, sidebar);
         return sidebar;
+    }
+
+    private JPanel createCardPanel(Color background) {
+        JPanel panel = new JPanel();
+        panel.setOpaque(true);
+        panel.setBackground(background);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(228, 190, 108, 120), 1),
+            BorderFactory.createEmptyBorder(16, 16, 16, 16)
+        ));
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return panel;
     }
 
     private JLabel sectionLabel(String text) {
         JLabel label = new JLabel(text);
         label.setForeground(GOLD);
-        label.setFont(new Font("Dialog", Font.BOLD, 15));
-        label.setAlignmentX(LEFT_ALIGNMENT);
+        label.setFont(new Font("SansSerif", Font.BOLD, 13));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
     }
 
-    private void styleButton(JButton button) {
-        button.setBackground(new Color(90, 62, 37));
-        button.setForeground(CREAM);
+    private void finishSidebar(JPanel statsCard, JPanel sidebar) {
+        JPanel statGrid = new JPanel(new GridLayout(0, 1, 0, 8));
+        statGrid.setOpaque(false);
+        for (JLabel label : new JLabel[]{bankrollLabel, potLabel, recordLabel, streakLabel, shoeLabel}) {
+            label.setForeground(CREAM);
+            label.setFont(new Font("SansSerif", Font.BOLD, 15));
+            statGrid.add(label);
+        }
+        statsCard.add(statGrid);
+        statsCard.add(Box.createVerticalStrut(12));
+        statsCard.add(sectionLabel("Suspicion"));
+        statsCard.add(Box.createVerticalStrut(8));
+
+        suspicionBar.setForeground(DANGER);
+        suspicionBar.setBackground(new Color(16, 21, 31));
+        suspicionBar.setStringPainted(true);
+        suspicionBar.setFont(new Font("SansSerif", Font.BOLD, 12));
+        suspicionBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(228, 190, 108), 1),
+            BorderFactory.createEmptyBorder(1, 1, 1, 1)
+        ));
+        statsCard.add(suspicionBar);
+
+        JPanel betCard = createCardPanel(PANEL_ALT);
+        betCard.add(sectionLabel("Betting Window"));
+        betCard.add(Box.createVerticalStrut(10));
+        betField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        betField.setFont(new Font("SansSerif", Font.BOLD, 18));
+        betField.setForeground(new Color(28, 23, 18));
+        betField.setBackground(new Color(246, 239, 226));
+        betField.setCaretColor(new Color(28, 23, 18));
+        betField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(228, 190, 108), 2),
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)
+        ));
+        betField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel betHint = new JLabel("Set the wager, then deal into the next hand.");
+        betHint.setForeground(MUTED);
+        betHint.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        betHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        betCard.add(betField);
+        betCard.add(Box.createVerticalStrut(10));
+        betCard.add(betHint);
+
+        JPanel actionsCard = createCardPanel(PANEL);
+        actionsCard.add(sectionLabel("Actions"));
+        actionsCard.add(Box.createVerticalStrut(10));
+        styleButton(tutorialButton, new Color(38, 46, 68), CREAM);
+        tutorialButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        tutorialButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        actionsCard.add(tutorialButton);
+        actionsCard.add(Box.createVerticalStrut(10));
+        JPanel buttonGrid = new JPanel(new GridLayout(4, 2, 10, 10));
+        buttonGrid.setOpaque(false);
+        styleButton(dealButton, GOLD, new Color(41, 29, 18));
+        styleButton(hitButton, new Color(60, 109, 191), CREAM);
+        styleButton(standButton, new Color(72, 131, 99), CREAM);
+        styleButton(doubleButton, new Color(111, 76, 161), CREAM);
+        styleButton(splitButton, new Color(79, 88, 108), CREAM);
+        styleButton(cheatButton, new Color(171, 69, 61), CREAM);
+        styleButton(duelButton, new Color(214, 96, 61), CREAM);
+        styleButton(resetButton, new Color(84, 57, 42), CREAM);
+        for (JButton button : new JButton[]{
+            dealButton, hitButton, standButton, doubleButton,
+            splitButton, cheatButton, duelButton, resetButton
+        }) {
+            buttonGrid.add(button);
+        }
+        actionsCard.add(buttonGrid);
+
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(betCard);
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(actionsCard);
+    }
+
+    private void styleButton(JButton button, Color background, Color foreground) {
+        button.setBackground(background);
+        button.setForeground(foreground);
+        button.setOpaque(true);
         button.setFocusPainted(false);
-        button.setFont(new Font("Dialog", Font.BOLD, 14));
+        button.setFont(new Font("SansSerif", Font.BOLD, 14));
         button.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(GOLD, 2),
-            BorderFactory.createEmptyBorder(7, 8, 7, 8)
+            BorderFactory.createLineBorder(new Color(255, 255, 255, 45), 1),
+            BorderFactory.createEmptyBorder(12, 10, 12, 10)
         ));
     }
 
@@ -249,6 +354,7 @@ public class GamePanel extends JPanel {
             soundManager.playEffect("card-clack.wav");
             refresh(true);
         });
+        tutorialButton.addActionListener(event -> showTutorialDialog());
         duelButton.addActionListener(event -> fireDuelDraw());
         resetButton.addActionListener(event -> {
             controller.resetSave();
@@ -266,11 +372,11 @@ public class GamePanel extends JPanel {
         if (typeTimer != null && typeTimer.isRunning()) {
             typeTimer.stop();
             eventArea.setText(currentPageText);
+            eventArea.setCaretPosition(0);
             narrativeAwaitingContinue = true;
             updateContinuePrompt();
             return;
         }
-
         if (narrativePageIndex < narrativePages.size() - 1) {
             narrativePageIndex++;
             typePage(narrativePages.get(narrativePageIndex));
@@ -290,19 +396,28 @@ public class GamePanel extends JPanel {
 
         currentSnapshot = controller.getSnapshot();
         opponentLabel.setText(currentSnapshot.opponentName());
-        statusLabel.setText("<html><body style='width:250px'>" + currentSnapshot.statusText().replace("\n", "<br>") + "</body></html>");
+        opponentLineLabel.setText(wrapHtml(currentSnapshot.opponentLine(), 280));
+        statusLabel.setText(wrapHtml(currentSnapshot.statusText(), 300));
+        subtitleLabel.setText(buildSubtitle(currentSnapshot));
+        headerMetaLabel.setText("<html><div style='text-align:right'>Facing "
+            + escapeHtml(currentSnapshot.opponentName())
+            + "<br>Shoe " + currentSnapshot.shoeCards()
+            + " / Suspicion " + currentSnapshot.suspicion() + "%"
+            + "</div></html>");
 
         bankrollLabel.setText("Bankroll: $" + currentSnapshot.bankroll());
-        potLabel.setText("Pot: $" + currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum());
-        recordLabel.setText("Record: " + currentSnapshot.wins() + " - " + currentSnapshot.losses() + "   Best streak: " + currentSnapshot.bestStreak());
+        potLabel.setText("Pot on felt: $" + currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum());
+        recordLabel.setText("Record: " + currentSnapshot.wins() + " - " + currentSnapshot.losses());
+        streakLabel.setText("Current streak: " + currentSnapshot.streak() + "   Best: " + currentSnapshot.bestStreak());
         shoeLabel.setText("Cards left in shoe: " + currentSnapshot.shoeCards());
         suspicionBar.setValue(currentSnapshot.suspicion());
-        suspicionBar.setString(currentSnapshot.suspicion() + "%");
+        suspicionBar.setString(currentSnapshot.suspicion() + "% watched");
 
         if (animateText) {
             prepareNarrative(currentSnapshot.eventText());
         } else {
             eventArea.setText(currentSnapshot.eventText());
+            eventArea.setCaretPosition(0);
             narrativePages = List.of(currentSnapshot.eventText());
             narrativePageIndex = 0;
             currentPageText = currentSnapshot.eventText();
@@ -315,14 +430,42 @@ public class GamePanel extends JPanel {
         doubleButton.setEnabled(currentSnapshot.canDouble());
         splitButton.setEnabled(currentSnapshot.canSplit());
         cheatButton.setEnabled(currentSnapshot.canCheat());
-        duelButton.setEnabled(false);
+        duelButton.setEnabled(currentSnapshot.duelActive());
 
-        duelSequenceQueued = false;
-        stopDuelTimer();
+        if (currentSnapshot.duelActive() && !currentSnapshot.duelCanDraw() && !duelSequenceQueued) {
+            duelSequenceQueued = true;
+            soundManager.playEffect("glass-break.wav");
+            shakeFrame();
+            beginDuelTimer();
+        } else if (currentSnapshot.duelCanDraw()) {
+            duelSequenceQueued = false;
+            stopDuelTimer();
+        } else if (!currentSnapshot.duelActive()) {
+            duelSequenceQueued = false;
+            stopDuelTimer();
+        }
+
+        if (!currentSnapshot.showLoading() && !tutorialShown) {
+            tutorialShown = true;
+            SwingUtilities.invokeLater(this::showTutorialDialog);
+        }
 
         tableCanvas.repaint();
         revalidate();
         repaint();
+    }
+
+    private String buildSubtitle(GameSnapshot snapshot) {
+        if (snapshot.showLoading()) {
+            return "The lamps are warming up and the felt is still settling.";
+        }
+        if (snapshot.duelActive()) {
+            return snapshot.duelCanDraw() ? "Steel is out. Move now." : "The room freezes before the draw.";
+        }
+        if (snapshot.roundActive()) {
+            return "The hand is live. Read the table and press the right edge.";
+        }
+        return "The next hand is yours to start when the bet window looks right.";
     }
 
     private void prepareNarrative(String text) {
@@ -345,7 +488,7 @@ public class GamePanel extends JPanel {
             if (part.isEmpty()) {
                 continue;
             }
-            if (page.length() + part.length() > 120 && page.length() > 0) {
+            if (page.length() + part.length() > 150 && page.length() > 0) {
                 pages.add(page.toString().trim());
                 page.setLength(0);
             }
@@ -365,10 +508,11 @@ public class GamePanel extends JPanel {
         currentCharIndex = 0;
         narrativeAwaitingContinue = false;
         eventArea.setText("");
+        eventArea.setCaretPosition(0);
         if (typeTimer != null) {
             typeTimer.stop();
         }
-        typeTimer = new Timer(34, event -> {
+        typeTimer = new Timer(28, event -> {
             if (currentCharIndex >= currentPageText.length()) {
                 typeTimer.stop();
                 narrativeAwaitingContinue = true;
@@ -386,10 +530,9 @@ public class GamePanel extends JPanel {
     }
 
     private void updateContinuePrompt() {
-        String prompt = narrativePageIndex < narrativePages.size() - 1
-            ? "\n\n[Press SPACE to continue]"
-            : "";
+        String prompt = narrativePageIndex < narrativePages.size() - 1 ? "\n\n[Press SPACE to continue]" : "";
         eventArea.setText(currentPageText + prompt);
+        eventArea.setCaretPosition(0);
     }
 
     private int parseBet() {
@@ -400,41 +543,155 @@ public class GamePanel extends JPanel {
         }
     }
 
+    private void showTutorialDialog() {
+        JTextArea tutorialArea = new JTextArea(buildTutorialText());
+        tutorialArea.setEditable(false);
+        tutorialArea.setLineWrap(true);
+        tutorialArea.setWrapStyleWord(true);
+        tutorialArea.setCaretPosition(0);
+        tutorialArea.setMargin(new Insets(14, 14, 14, 14));
+        tutorialArea.setFont(new Font("SansSerif", Font.PLAIN, 15));
+        tutorialArea.setForeground(new Color(28, 24, 21));
+        tutorialArea.setBackground(new Color(248, 242, 231));
+
+        JScrollPane scrollPane = new JScrollPane(tutorialArea);
+        scrollPane.setPreferredSize(new Dimension(680, 520));
+
+        JOptionPane.showMessageDialog(
+            frame,
+            scrollPane,
+            "Blackjack Saloon Tutorial",
+            JOptionPane.INFORMATION_MESSAGE
+        );
+    }
+
+    private String buildTutorialText() {
+        return """
+            WELCOME TO BLACKJACK SALOON
+
+            Display note:
+            This game is best experienced maximized or fullscreen so the table layout, cards, and side panels have enough room.
+
+            Your goal:
+            Beat the dealer without going over 21. Number cards are worth their number. Face cards count as 10. Aces count as 11 unless that would bust your hand, then they count as 1.
+
+            How a round works:
+            1. Enter a bet in the Betting Window.
+            2. Press Deal In to receive your opening hand.
+            3. The dealer gets cards too, but during a live hand only part of the dealer value is shown.
+            4. Choose actions until you stand, bust, or finish the hand.
+            5. When the hand ends, winnings or losses are applied to your bankroll.
+
+            Core actions:
+            Deal In: Starts the next round using the bet you entered.
+            Take Card: Adds one card to your active hand.
+            Hold: Ends your play and lets the dealer finish.
+            Double: Doubles the current hand's bet, deals one final card, and locks the hand.
+            Split: If available, breaks a matching pair into two hands.
+            Cheat: Swaps in a better card, but raises suspicion.
+            Draw: Used only during duel moments, if that system is active.
+            Reset: Wipes your save progress and bankroll back to the default table state.
+
+            How winning works:
+            If your final value is higher than the dealer's without busting, you win.
+            If the dealer busts and you do not, you win.
+            If you and the dealer tie, it is a push and your bet is returned.
+            A natural blackjack pays better than a normal win.
+
+            Tavern systems:
+            Bankroll shows how much fake money you still have.
+            Pot on felt shows how much is currently committed in the hand.
+            Suspicion rises when you cheat. High suspicion is dangerous in the saloon and can affect how the room reacts.
+            Record and streak track your performance across hands.
+            The Story panel delivers tavern flavor, warnings, and event text. Press SPACE to move through longer story beats.
+
+            Good beginner strategy:
+            Stay under 21.
+            Use Hold when you are happy with your total and want the dealer to take the risk.
+            Be careful with Double because it commits more money immediately.
+            Avoid Cheat until you understand the normal flow of the table.
+
+            Tavern flavor guide:
+            The named opponent is the personality across the table.
+            The center felt shows the live hand and the chips in play.
+            The lower hand panel is your active hand area.
+            The right-side dashboard is your control booth for bets, status, and actions.
+
+            If you ever want this guide again, press the How To Play button in the Actions panel.
+            """;
+    }
+
+    private List<String> parseCards(String description) {
+        List<String> cards = new ArrayList<>();
+        if (description == null || description.isBlank()) {
+            return cards;
+        }
+        int start = 0;
+        while (start < description.length()) {
+            int open = description.indexOf('[', start);
+            if (open < 0) {
+                break;
+            }
+            int close = description.indexOf(']', open + 1);
+            if (close < 0) {
+                break;
+            }
+            cards.add(description.substring(open + 1, close).trim());
+            start = close + 1;
+        }
+        return cards;
+    }
+
+    private String escapeHtml(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    private String wrapHtml(String text, int width) {
+        return "<html><div style='width:" + width + "px'>" + escapeHtml(text).replace("\n", "<br>") + "</div></html>";
+    }
+
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
         Graphics2D g2 = (Graphics2D) graphics.create();
-        g2.setColor(BACKDROP);
+        g2.setPaint(new GradientPaint(0, 0, BACKDROP_TOP, 0, getHeight(), BACKDROP_BOTTOM));
         g2.fillRect(0, 0, getWidth(), getHeight());
+        g2.setComposite(AlphaComposite.SrcOver.derive(0.2f));
+        g2.setPaint(new GradientPaint(0, 0, new Color(205, 77, 60), getWidth(), getHeight(), new Color(0, 0, 0, 0)));
+        g2.fillOval(-180, -120, 520, 360);
+        g2.fillOval(getWidth() - 320, -90, 390, 280);
         g2.dispose();
     }
 
     @Override
     public void paint(Graphics graphics) {
         super.paint(graphics);
-
         if (loadingOverlayAlpha <= 0f) {
             return;
         }
 
         Graphics2D g2 = (Graphics2D) graphics.create();
-        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g2.setComposite(AlphaComposite.SrcOver.derive(Math.max(0f, Math.min(1f, loadingOverlayAlpha))));
-        g2.setColor(Color.BLACK);
+        g2.setColor(new Color(5, 8, 14));
         g2.fillRect(0, 0, getWidth(), getHeight());
 
-        float pulse = Math.max(0.35f, Math.min(1f, 0.65f + (float) Math.sin(loadingTextPulse) * 0.25f));
+        float pulse = Math.max(0.42f, Math.min(1f, 0.72f + (float) Math.sin(loadingTextPulse) * 0.2f));
         g2.setComposite(AlphaComposite.SrcOver.derive(pulse));
-        g2.setColor(CREAM);
-        g2.setFont(new Font("Monospaced", Font.BOLD, 38));
-        String title = "DON'T GAMBLE";
-        int centerY = getHeight() / 2 - 24;
+        g2.setColor(GOLD);
+        g2.setFont(new Font("Serif", Font.BOLD, 44));
+        String title = "SALOON OPENING";
+        int centerY = getHeight() / 2 - 22;
         int titleWidth = g2.getFontMetrics().stringWidth(title);
         g2.drawString(title, (getWidth() - titleWidth) / 2, centerY);
-        g2.setFont(new Font("Monospaced", Font.BOLD, 15));
-        String line = "FAKE MONEY. REAL CONSEQUENCES.";
+        g2.setColor(CREAM);
+        g2.setFont(new Font("SansSerif", Font.PLAIN, 16));
+        String line = "Best experienced maximized or fullscreen. The room settles in a moment.";
         int lineWidth = g2.getFontMetrics().stringWidth(line);
-        g2.drawString(line, (getWidth() - lineWidth) / 2, centerY + 42);
+        g2.drawString(line, (getWidth() - lineWidth) / 2, centerY + 40);
         g2.dispose();
     }
 
@@ -507,149 +764,394 @@ public class GamePanel extends JPanel {
             Graphics2D g2 = (Graphics2D) graphics.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            int width = getWidth();
-            int height = getHeight();
+            int w = getWidth();
+            int h = getHeight();
+            int stageX = 18;
+            int stageY = 22;
+            int stageW = w - 36;
+            int stageH = h - 38;
 
-            g2.setColor(new Color(93, 60, 34));
-            g2.fillRoundRect(10, 16, width - 20, height - 32, 36, 36);
-            g2.setColor(FELT_DARK);
-            g2.fillRoundRect(24, 30, width - 48, height - 60, 28, 28);
+            g2.setComposite(AlphaComposite.SrcOver.derive(0.22f));
+            g2.setColor(Color.BLACK);
+            g2.fillRoundRect(stageX + 10, stageY + 16, stageW, stageH, 54, 54);
+            g2.setComposite(AlphaComposite.SrcOver);
 
-            Arc2D halfCircle = new Arc2D.Double(70, 60, width - 140, height - 150, 0, 180, Arc2D.OPEN);
-            g2.setStroke(new BasicStroke(4f));
-            g2.setColor(GOLD);
-            g2.draw(halfCircle);
-
-            drawDealer(g2, width);
-            drawDealerCards(g2, width);
-            drawPot(g2, width, height);
-            drawPlayerArea(g2, width, height);
+            drawRoomBackdrop(g2, stageX, stageY, stageW, stageH);
+            drawTablePerspective(g2, stageX, stageY, stageW, stageH);
             g2.dispose();
         }
 
-        private void drawDealer(Graphics2D g2, int width) {
-            int centerX = width / 2;
-            g2.setColor(new Color(63, 40, 27));
-            g2.fill(new Ellipse2D.Double(centerX - 24, 80, 48, 48));
-            g2.fillRoundRect(centerX - 40, 120, 80, 70, 18, 18);
+        private void drawRoomBackdrop(Graphics2D g2, int x, int y, int width, int height) {
+            g2.setPaint(new GradientPaint(x, y, new Color(35, 25, 31), x, y + height, new Color(18, 14, 20)));
+            g2.fillRoundRect(x, y, width, height, 48, 48);
+
+            int curtainWidth = Math.max(120, width / 5);
+            g2.setColor(new Color(74, 28, 32, 165));
+            g2.fillArc(x - curtainWidth / 2, y - 30, curtainWidth * 2, 220, 90, 180);
+            g2.fillArc(x + width - curtainWidth * 3 / 2, y - 20, curtainWidth * 2, 220, 270, 180);
+
+            g2.setColor(new Color(255, 216, 137, 28));
+            g2.fillOval(x + width / 2 - 180, y + 10, 360, 160);
+            g2.fillOval(x + width / 2 - 260, y + 40, 520, 110);
+
+            int backBarY = y + 36;
+            g2.setColor(new Color(22, 17, 25, 170));
+            g2.fillRoundRect(x + 90, backBarY, width - 180, 58, 24, 24);
+            g2.setColor(new Color(232, 193, 108, 95));
+            g2.drawRoundRect(x + 90, backBarY, width - 180, 58, 24, 24);
+            g2.setFont(new Font("Serif", Font.BOLD, 24));
             g2.setColor(CREAM);
-            g2.setFont(new Font("Dialog", Font.BOLD, 18));
-            String name = "Dealer";
+            g2.drawString(currentSnapshot.opponentName() + " across the rail", x + 122, backBarY + 38);
+        }
+
+        private void drawTablePerspective(Graphics2D g2, int x, int y, int width, int height) {
+            int railX = x + 12;
+            int railY = y + 110;
+            int railW = width - 24;
+            int railH = height + 430;
+            int feltInset = 22;
+
+            g2.setPaint(new GradientPaint(railX, railY, new Color(132, 77, 41), railX, railY + 180, TABLE_EDGE));
+            g2.fillArc(railX, railY, railW, railH, 0, 180);
+
+            g2.setPaint(new GradientPaint(railX + feltInset, railY + feltInset,
+                new Color(24, 101, 80), railX + feltInset, railY + feltInset + 260, TABLE_BOTTOM));
+            g2.fillArc(railX + feltInset, railY + feltInset, railW - feltInset * 2, railH - feltInset * 2, 0, 180);
+
+            g2.setColor(new Color(244, 207, 121, 120));
+            g2.setStroke(new BasicStroke(3f));
+            g2.drawArc(railX + feltInset + 14, railY + feltInset + 14, railW - (feltInset + 14) * 2, railH - (feltInset + 14) * 2, 0, 180);
+
+            int centerX = x + width / 2;
+            int centerY = railY + railH / 2;
+            int radiusX = railW / 2 - 36;
+            int radiusY = railH / 2 - 48;
+
+            drawTableBranding(g2, centerX, y + 332);
+            drawRailPlayers(g2, centerX, centerY, radiusX, radiusY);
+            drawDealerReach(g2, centerX, y + 132);
+            drawPotZone(g2, centerX, y + 382);
+            drawHandZone(g2, x, y, width, height, centerX);
+            drawPrompt(g2, centerX, y + height - 34);
+        }
+
+        private void drawTableBranding(Graphics2D g2, int centerX, int centerY) {
+            g2.setColor(new Color(241, 225, 179, 155));
+            g2.setFont(new Font("Serif", Font.BOLD, 36));
+            String title = "BLACKJACK";
+            int titleWidth = g2.getFontMetrics().stringWidth(title);
+            g2.drawString(title, centerX - titleWidth / 2, centerY);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 18));
+            String sub = "INSURANCE PAYS 2 TO 1";
+            int subWidth = g2.getFontMetrics().stringWidth(sub);
+            g2.drawString(sub, centerX - subWidth / 2, centerY + 26);
+            g2.setStroke(new BasicStroke(2.5f));
+            g2.draw(new Arc2D.Double(centerX - 260, centerY - 48, 520, 110, 18, 144, Arc2D.OPEN));
+        }
+
+        private void drawRailPlayers(Graphics2D g2, int centerX, int centerY, int radiusX, int radiusY) {
+            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 154, "Miner", new Color(71, 52, 45), 2, false, false);
+            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 128, "Mae", new Color(77, 49, 41), 3, false, false);
+            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 90, currentSnapshot.opponentName(), new Color(53, 61, 82), 4, true, true);
+            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 52, "Boone", new Color(70, 52, 43), 2, false, false);
+            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 26, "Doc", new Color(58, 54, 70), 3, false, false);
+        }
+
+        private void drawSeatScene(Graphics2D g2, int centerX, int centerY, int radiusX, int radiusY,
+                                   int angleDegrees, String name, Color coatColor, int chipCount,
+                                   boolean dealerCards, boolean highlight) {
+            Point seat = pointOnEllipse(centerX, centerY, radiusX, radiusY, angleDegrees);
+            Point chipSpot = pointOnEllipse(centerX, centerY, radiusX - 130, radiusY - 110, angleDegrees);
+            Point cardSpot = pointOnEllipse(centerX, centerY, radiusX - 80, radiusY - 70, angleDegrees);
+
+            drawRailCharacter(g2, seat.x, seat.y - 20, coatColor, name, highlight);
+            drawBetRing(g2, chipSpot.x, chipSpot.y, highlight ? 30 : 24);
+            drawChipStack(g2, chipSpot.x - 18, chipSpot.y - 8, highlight ? new Color(222, 183, 88) : new Color(194, 72, 56), chipCount);
+
+            List<String> cards = dealerCards ? parseCards(currentSnapshot.dealerCards()) : List.of("10", "8");
+            drawCardFan(g2, cards, cardSpot.x, cardSpot.y, dealerCards ? 72 : 60, dealerCards ? 98 : 84, 18);
+
+            if (highlight) {
+                g2.setColor(new Color(255, 228, 152, 140));
+                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+                int nameWidth = g2.getFontMetrics().stringWidth(name);
+                g2.drawString(name, seat.x - nameWidth / 2, seat.y - 90);
+            }
+        }
+
+        private void drawRailCharacter(Graphics2D g2, int x, int y, Color coatColor, String name, boolean highlight) {
+            g2.setColor(new Color(0, 0, 0, 70));
+            g2.fillOval(x - 52, y - 18, 104, 30);
+
+            g2.setColor(new Color(52, 34, 26));
+            g2.fillOval(x - 20, y - 74, 40, 44);
+            g2.setColor(coatColor);
+            g2.fillRoundRect(x - 58, y - 38, 116, 64, 28, 28);
+            g2.setColor(new Color(235, 209, 179));
+            g2.fillOval(x - 16, y - 64, 32, 34);
+            g2.setColor(new Color(28, 20, 17));
+            g2.drawOval(x - 16, y - 64, 32, 34);
+
+            g2.setColor(highlight ? GOLD : new Color(220, 211, 195, 180));
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
             int nameWidth = g2.getFontMetrics().stringWidth(name);
-            g2.drawString(name, centerX - nameWidth / 2, 215);
+            g2.drawString(name, x - nameWidth / 2, y + 44);
         }
 
-        private void drawDealerCards(Graphics2D g2, int width) {
-            drawCardRow(g2, parseCards(currentSnapshot.dealerCards()), width / 2, 255);
-            g2.setFont(new Font("Dialog", Font.BOLD, 15));
-            String value = currentSnapshot.roundActive()
-                ? "Showing " + currentSnapshot.dealerVisibleValue()
-                : "Value " + currentSnapshot.dealerFinalValue();
-            int valueWidth = g2.getFontMetrics().stringWidth(value);
-            g2.setColor(CREAM);
-            g2.drawString(value, width / 2 - valueWidth / 2, 315);
+        private void drawDealerReach(Graphics2D g2, int centerX, int topY) {
+            Path2D.Double leftArm = new Path2D.Double();
+            leftArm.moveTo(centerX - 70, topY);
+            leftArm.curveTo(centerX - 120, topY + 36, centerX - 68, topY + 106, centerX - 16, topY + 156);
+            leftArm.lineTo(centerX + 4, topY + 144);
+            leftArm.curveTo(centerX - 44, topY + 98, centerX - 84, topY + 46, centerX - 38, topY + 2);
+            leftArm.closePath();
+            g2.setColor(new Color(70, 91, 130));
+            g2.fill(leftArm);
+
+            Path2D.Double rightArm = new Path2D.Double();
+            rightArm.moveTo(centerX + 74, topY + 4);
+            rightArm.curveTo(centerX + 112, topY + 48, centerX + 66, topY + 112, centerX + 14, topY + 170);
+            rightArm.lineTo(centerX - 8, topY + 158);
+            rightArm.curveTo(centerX + 40, topY + 100, centerX + 78, topY + 42, centerX + 42, topY);
+            rightArm.closePath();
+            g2.fill(rightArm);
+
+            g2.setColor(new Color(225, 196, 172));
+            g2.fillOval(centerX - 22, topY + 150, 44, 26);
+            g2.fillRoundRect(centerX - 12, topY + 118, 24, 44, 10, 10);
         }
 
-        private void drawPot(Graphics2D g2, int width, int height) {
+        private void drawPotZone(Graphics2D g2, int centerX, int centerY) {
             int pot = currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum();
-            int centerX = width / 2;
-            int centerY = height / 2 + 8;
-
+            g2.setColor(new Color(11, 16, 24, 185));
+            g2.fillRoundRect(centerX - 128, centerY - 54, 256, 118, 28, 28);
+            g2.setColor(new Color(255, 220, 137, 110));
+            g2.drawRoundRect(centerX - 128, centerY - 54, 256, 118, 28, 28);
+            g2.setColor(MUTED);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+            String stake = currentSnapshot.roundActive() ? "Pot on felt" : "Table stake";
+            int sw = g2.getFontMetrics().stringWidth(stake);
+            g2.drawString(stake, centerX - sw / 2, centerY - 22);
             g2.setColor(GOLD);
-            g2.setFont(new Font("Dialog", Font.BOLD, 20));
-            String potText = "Pot: $" + pot;
-            int potWidth = g2.getFontMetrics().stringWidth(potText);
-            g2.drawString(potText, centerX - potWidth / 2, centerY - 8);
-
-            drawChipStack(g2, centerX - 76, centerY + 24, CHIP_RED, 4);
-            drawChipStack(g2, centerX - 17, centerY + 16, CHIP_WHITE, 5);
-            drawChipStack(g2, centerX + 42, centerY + 24, CHIP_BLUE, 4);
+            g2.setFont(new Font("Serif", Font.BOLD, 34));
+            String potText = "$" + pot;
+            int pw = g2.getFontMetrics().stringWidth(potText);
+            g2.drawString(potText, centerX - pw / 2, centerY + 12);
+            drawChipStack(g2, centerX - 86, centerY + 42, new Color(193, 72, 56), Math.max(2, Math.min(6, pot / 40 + 2)));
+            drawChipStack(g2, centerX - 14, centerY + 32, new Color(44, 46, 56), Math.max(3, Math.min(7, pot / 35 + 3)));
+            drawChipStack(g2, centerX + 58, centerY + 42, new Color(75, 109, 211), Math.max(2, Math.min(6, pot / 50 + 2)));
         }
 
         private void drawChipStack(Graphics2D g2, int x, int y, Color color, int count) {
             for (int i = 0; i < count; i++) {
                 int yy = y - i * 8;
+                g2.setColor(new Color(0, 0, 0, 60));
+                g2.fillOval(x + 3, yy + 3, 36, 16);
                 g2.setColor(color);
-                g2.fillOval(x, yy, 34, 14);
+                g2.fillOval(x, yy, 36, 16);
                 g2.setColor(CREAM);
-                g2.drawOval(x, yy, 34, 14);
+                g2.drawOval(x, yy, 36, 16);
+                g2.drawLine(x + 6, yy + 8, x + 30, yy + 8);
             }
         }
 
-        private void drawPlayerArea(Graphics2D g2, int width, int height) {
+        private Point pointOnEllipse(int centerX, int centerY, int radiusX, int radiusY, int angleDegrees) {
+            double radians = Math.toRadians(angleDegrees);
+            int px = centerX + (int) Math.round(Math.cos(radians) * radiusX);
+            int py = centerY - (int) Math.round(Math.sin(radians) * radiusY);
+            return new Point(px, py);
+        }
+
+        private void drawHandZone(Graphics2D g2, int x, int y, int width, int height, int centerX) {
+            drawPlayerHands(g2, x, y, width, height, centerX);
+            drawPlayerFists(g2, centerX, y + height - 32);
+        }
+
+        private void drawPlayerHands(Graphics2D g2, int x, int y, int width, int height, int centerX) {
             List<String> hands = currentSnapshot.playerHands();
-            int areaY = height - 184;
-            int spacing = hands.size() == 1 ? 0 : 220;
-            int startX = width / 2 - (hands.size() - 1) * spacing / 2;
+            int count = Math.max(1, hands.size());
+            int cardZoneY = y + height - 132;
+            int spread = count == 1 ? 0 : 210;
 
-            for (int i = 0; i < hands.size(); i++) {
-                boolean active = i == currentSnapshot.activeHandIndex() && currentSnapshot.roundActive();
-                int x = startX + i * spacing;
+            for (int i = 0; i < count; i++) {
+                int handCenter = centerX + (i - (count - 1) / 2) * spread;
+                boolean active = i < hands.size() && i == currentSnapshot.activeHandIndex() && currentSnapshot.roundActive();
                 int bet = i < currentSnapshot.handBets().size() ? currentSnapshot.handBets().get(i) : 0;
-                int panelX = x - 110;
-                int panelY = areaY - 6;
-                int panelWidth = 220;
-                int panelHeight = 116;
+                int value = i < currentSnapshot.playerValues().size() ? currentSnapshot.playerValues().get(i) : 0;
+                List<String> cards = i < hands.size() ? parseCards(hands.get(i)) : List.of();
 
-                g2.setColor(active ? new Color(255, 228, 164) : new Color(232, 222, 201));
-                g2.fillRoundRect(panelX, panelY, panelWidth, panelHeight, 20, 20);
-                g2.setColor(active ? GOLD : WOOD);
-                g2.setStroke(new BasicStroke(3f));
-                g2.drawRoundRect(panelX, panelY, panelWidth, panelHeight, 20, 20);
-
-                g2.setColor(new Color(54, 35, 24));
-                g2.setFont(new Font("Dialog", Font.BOLD, 14));
-                g2.drawString("Hand " + (i + 1) + "  Bet $" + bet, panelX + 18, panelY + 24);
-                drawCardRow(g2, parseCards(hands.get(i)), x, panelY + 56);
-                g2.setFont(new Font("Dialog", Font.BOLD, 14));
-                g2.drawString("Value " + currentSnapshot.playerValues().get(i), panelX + 18, panelY + 98);
+                drawBetRing(g2, handCenter, y + height - 190, active ? 36 : 30);
+                drawCardFan(g2, cards, handCenter, cardZoneY, 74, 102, 18);
+                drawBadge(g2, "Bet $" + bet, handCenter - 56, y + height - 246, 112, 26,
+                    active ? new Color(223, 186, 104) : new Color(77, 50, 31), active ? new Color(32, 24, 18) : GOLD);
+                drawBadge(g2, "Value " + value, handCenter - 56, y + height - 54, 112, 24,
+                    new Color(13, 20, 28, 215), CREAM);
             }
         }
 
-        private void drawCardRow(Graphics2D g2, List<String> cards, int centerX, int baselineY) {
+        private void drawPlayerFists(Graphics2D g2, int centerX, int baselineY) {
+            drawPlayerFist(g2, centerX - 162, baselineY, true);
+            drawPlayerFist(g2, centerX + 162, baselineY, false);
+        }
+
+        private void drawPlayerFist(Graphics2D g2, int x, int y, boolean left) {
+            Path2D.Double sleeve = new Path2D.Double();
+            if (left) {
+                sleeve.moveTo(x - 84, y + 8);
+                sleeve.lineTo(x - 18, y - 10);
+                sleeve.lineTo(x + 4, y + 46);
+                sleeve.lineTo(x - 66, y + 66);
+            } else {
+                sleeve.moveTo(x + 84, y + 8);
+                sleeve.lineTo(x + 18, y - 10);
+                sleeve.lineTo(x - 4, y + 46);
+                sleeve.lineTo(x + 66, y + 66);
+            }
+            sleeve.closePath();
+            g2.setColor(new Color(63, 42, 27));
+            g2.fill(sleeve);
+
+            Path2D.Double fist = new Path2D.Double();
+            if (left) {
+                fist.moveTo(x - 8, y - 4);
+                fist.curveTo(x - 40, y - 8, x - 54, y + 22, x - 46, y + 42);
+                fist.curveTo(x - 36, y + 62, x - 8, y + 70, x + 18, y + 52);
+                fist.curveTo(x + 28, y + 42, x + 28, y + 12, x + 4, y + 0);
+            } else {
+                fist.moveTo(x + 8, y - 4);
+                fist.curveTo(x + 40, y - 8, x + 54, y + 22, x + 46, y + 42);
+                fist.curveTo(x + 36, y + 62, x + 8, y + 70, x - 18, y + 52);
+                fist.curveTo(x - 28, y + 42, x - 28, y + 12, x - 4, y + 0);
+            }
+            fist.closePath();
+            g2.setColor(new Color(118, 88, 58));
+            g2.fill(fist);
+            g2.setColor(new Color(55, 37, 23));
+            g2.draw(fist);
+
+            for (int i = 0; i < 4; i++) {
+                int knuckleX = left ? x - 34 + i * 12 : x - 14 + i * 12;
+                g2.setColor(new Color(155, 123, 88));
+                g2.fillOval(knuckleX, y + 6, 12, 12);
+            }
+        }
+
+        private void drawBetRing(Graphics2D g2, int centerX, int centerY, int radius) {
+            g2.setColor(new Color(239, 230, 204, 185));
+            g2.setStroke(new BasicStroke(2.2f));
+            g2.drawOval(centerX - radius, centerY - radius / 2, radius * 2, radius);
+        }
+
+        private void drawBadge(Graphics2D g2, String text, int x, int y, int width, int height, Color fill, Color textColor) {
+            g2.setColor(fill);
+            g2.fillRoundRect(x, y, width, height, 14, 14);
+            g2.setColor(new Color(255, 255, 255, 55));
+            g2.drawRoundRect(x, y, width, height, 14, 14);
+            g2.setColor(textColor);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            int tw = g2.getFontMetrics().stringWidth(text);
+            g2.drawString(text, x + (width - tw) / 2, y + 16);
+        }
+
+        private void drawPrompt(Graphics2D g2, int centerX, int y) {
+            String prompt;
+            if (currentSnapshot.showLoading()) {
+                prompt = "The room is still setting the table.";
+            } else if (currentSnapshot.duelActive()) {
+                prompt = currentSnapshot.duelCanDraw() ? "Draw now." : "Hands off the iron.";
+            } else if (currentSnapshot.roundActive()) {
+                prompt = "The hand is live. Play from your seat.";
+            } else if (currentSnapshot.canDeal()) {
+                prompt = "Set a wager, then deal into the next round.";
+            } else {
+                prompt = "The table is paused.";
+            }
+            g2.setFont(new Font("SansSerif", Font.BOLD, 15));
+            int tw = g2.getFontMetrics().stringWidth(prompt);
+            int bw = tw + 34;
+            int bx = centerX - bw / 2;
+            g2.setColor(new Color(11, 14, 21, 170));
+            g2.fillRoundRect(bx, y, bw, 28, 16, 16);
+            g2.setColor(new Color(255, 220, 135, 120));
+            g2.drawRoundRect(bx, y, bw, 28, 16, 16);
+            g2.setColor(CREAM);
+            g2.drawString(prompt, centerX - tw / 2, y + 19);
+        }
+
+        private void drawCardFan(Graphics2D g2, List<String> cards, int centerX, int y, int cardWidth, int cardHeight, int overlap) {
             if (cards.isEmpty()) {
-                g2.setColor(CREAM);
-                g2.setFont(new Font("Dialog", Font.BOLD, 16));
-                String text = "No cards yet";
-                int width = g2.getFontMetrics().stringWidth(text);
-                g2.drawString(text, centerX - width / 2, baselineY);
+                drawGhostCard(g2, centerX - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
+                return;
+            }
+            int totalWidth = cards.size() * cardWidth - Math.max(0, cards.size() - 1) * overlap;
+            int startX = centerX - totalWidth / 2;
+            for (int i = 0; i < cards.size(); i++) {
+                int cardX = startX + i * (cardWidth - overlap);
+                drawCard(g2, cardX, y - cardHeight / 2, cardWidth, cardHeight, cards.get(i));
+            }
+        }
+
+        private void drawGhostCard(Graphics2D g2, int x, int y, int width, int height) {
+            g2.setColor(new Color(255, 255, 255, 24));
+            g2.fillRoundRect(x, y, width, height, 18, 18);
+            g2.setColor(new Color(255, 255, 255, 58));
+            g2.drawRoundRect(x, y, width, height, 18, 18);
+            g2.setColor(MUTED);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+            String text = "WAITING";
+            int tw = g2.getFontMetrics().stringWidth(text);
+            g2.drawString(text, x + (width - tw) / 2, y + height / 2 + 4);
+        }
+
+        private void drawCard(Graphics2D g2, int x, int y, int width, int height, String token) {
+            if ("?".equals(token)) {
+                drawHiddenCard(g2, x, y, width, height);
                 return;
             }
 
-            int cardWidth = 52;
-            int cardHeight = 70;
-            int gap = 12;
-            int totalWidth = cards.size() * cardWidth + (cards.size() - 1) * gap;
-            int startX = centerX - totalWidth / 2;
-            int y = baselineY - 35;
+            Color accent = switch (token) {
+                case "A", "K", "Q", "J" -> new Color(164, 59, 70);
+                case "10" -> new Color(197, 145, 57);
+                default -> new Color(50, 77, 128);
+            };
 
-            for (int i = 0; i < cards.size(); i++) {
-                int x = startX + i * (cardWidth + gap);
-                g2.setColor(new Color(248, 242, 231));
-                g2.fillRoundRect(x, y, cardWidth, cardHeight, 10, 10);
-                g2.setColor(WOOD);
-                g2.setStroke(new BasicStroke(2f));
-                g2.drawRoundRect(x, y, cardWidth, cardHeight, 10, 10);
-                g2.setFont(new Font("Dialog", Font.BOLD, 22));
-                String value = cards.get(i);
-                int textWidth = g2.getFontMetrics().stringWidth(value);
-                g2.drawString(value, x + (cardWidth - textWidth) / 2, y + 41);
-            }
+            g2.setColor(new Color(0, 0, 0, 72));
+            g2.fillRoundRect(x + 4, y + 6, width, height, 18, 18);
+            g2.setPaint(new GradientPaint(x, y, new Color(255, 249, 240), x, y + height, new Color(235, 225, 210)));
+            g2.fillRoundRect(x, y, width, height, 18, 18);
+            g2.setColor(new Color(72, 51, 35));
+            g2.setStroke(new BasicStroke(2f));
+            g2.drawRoundRect(x, y, width, height, 18, 18);
+            g2.setColor(accent);
+            g2.fillRoundRect(x + 10, y + 10, width - 20, 22, 12, 12);
+            g2.setColor(CREAM);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+            g2.drawString("CARD", x + width / 2 - 17, y + 25);
+            g2.setColor(new Color(38, 30, 23));
+            g2.setFont(new Font("Serif", Font.BOLD, 34));
+            int tw = g2.getFontMetrics().stringWidth(token);
+            g2.drawString(token, x + (width - tw) / 2, y + 70);
+            g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 62));
+            g2.setFont(new Font("Serif", Font.BOLD, 46));
+            int mw = g2.getFontMetrics().stringWidth(token);
+            g2.drawString(token, x + (width - mw) / 2, y + height - 22);
         }
 
-        private List<String> parseCards(String description) {
-            List<String> cards = new ArrayList<>();
-            if (description == null || description.isBlank()) {
-                return cards;
+        private void drawHiddenCard(Graphics2D g2, int x, int y, int width, int height) {
+            g2.setColor(new Color(0, 0, 0, 72));
+            g2.fillRoundRect(x + 4, y + 6, width, height, 18, 18);
+            g2.setPaint(new GradientPaint(x, y, new Color(38, 44, 63), x, y + height, new Color(17, 24, 39)));
+            g2.fillRoundRect(x, y, width, height, 18, 18);
+            g2.setColor(GOLD);
+            g2.setStroke(new BasicStroke(2f));
+            g2.drawRoundRect(x, y, width, height, 18, 18);
+            g2.setColor(new Color(255, 255, 255, 35));
+            for (int offset = -height; offset < width; offset += 12) {
+                g2.drawLine(x + offset, y + height, x + offset + height, y);
             }
-            String[] parts = description.trim().split("\\s+");
-            for (String part : parts) {
-                String cleaned = part.replace("[", "").replace("]", "").trim();
-                if (!cleaned.isEmpty() && !cleaned.equals("?")) {
-                    cards.add(cleaned);
-                }
-            }
-            return cards;
+            g2.setColor(CREAM);
+            g2.setFont(new Font("Serif", Font.BOLD, 38));
+            g2.drawString("?", x + width / 2 - 9, y + height / 2 + 14);
         }
     }
 }
