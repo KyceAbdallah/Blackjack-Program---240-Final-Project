@@ -11,6 +11,7 @@ import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
@@ -23,16 +24,20 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
+import javax.swing.JScrollBar;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.JButton;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 
 public class GamePanel extends JPanel {
     private static final Color BACKDROP_TOP = new Color(15, 22, 36);
@@ -54,7 +59,7 @@ public class GamePanel extends JPanel {
 
     private final JLabel titleLabel = new JLabel("BLACKJACK SALOON");
     private final JLabel subtitleLabel = new JLabel();
-    private final JLabel displayNoteLabel = new JLabel("Best experienced maximized or fullscreen.");
+    private final JLabel displayNoteLabel = new JLabel("Layout scales with the window. Fullscreen still gives the cleanest table view.");
     private final JLabel headerMetaLabel = new JLabel("", SwingConstants.RIGHT);
     private final JLabel opponentLabel = new JLabel();
     private final JLabel opponentLineLabel = new JLabel();
@@ -77,6 +82,9 @@ public class GamePanel extends JPanel {
     private final JButton resetButton = new JButton("Reset");
     private final JButton tutorialButton = new JButton("How To Play");
     private final TableCanvas tableCanvas = new TableCanvas();
+    private JPanel sidebarPanel;
+    private JScrollPane sidebarScrollPane;
+    private JScrollPane storyPane;
 
     private Timer typeTimer;
     private Timer duelTimer;
@@ -106,15 +114,29 @@ public class GamePanel extends JPanel {
     private void buildUi() {
         setOpaque(false);
         setLayout(new BorderLayout(24, 24));
-        setBorder(BorderFactory.createEmptyBorder(20, 22, 22, 22));
+        setBorder(BorderFactory.createEmptyBorder(20, 22, 6, 22));
 
         add(buildHeader(), BorderLayout.NORTH);
 
         JPanel body = new JPanel(new BorderLayout(22, 0));
-        body.setOpaque(false);
-        tableCanvas.setPreferredSize(new Dimension(930, 760));
+        body.setOpaque(true);
+        body.setBackground(new Color(24, 18, 30));
+        tableCanvas.setPreferredSize(new Dimension(820, 620));
         body.add(tableCanvas, BorderLayout.CENTER);
-        body.add(buildSidebar(), BorderLayout.EAST);
+        sidebarPanel = buildSidebar();
+        sidebarScrollPane = new JScrollPane(
+            sidebarPanel,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+        );
+        sidebarScrollPane.setOpaque(true);
+        sidebarScrollPane.setBackground(new Color(24, 18, 30));
+        sidebarScrollPane.getViewport().setOpaque(true);
+        sidebarScrollPane.getViewport().setBackground(new Color(24, 18, 30));
+        sidebarScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        sidebarScrollPane.setPreferredSize(new Dimension(380, 760));
+        styleScrollPane(sidebarScrollPane);
+        body.add(sidebarScrollPane, BorderLayout.EAST);
         add(body, BorderLayout.CENTER);
     }
 
@@ -158,8 +180,10 @@ public class GamePanel extends JPanel {
 
     private JPanel buildSidebar() {
         JPanel sidebar = new JPanel();
-        sidebar.setOpaque(false);
-        sidebar.setPreferredSize(new Dimension(360, 760));
+        sidebar.setOpaque(true);
+        sidebar.setBackground(new Color(24, 18, 30));
+        sidebar.setPreferredSize(new Dimension(380, 760));
+        sidebar.setMinimumSize(new Dimension(320, 0));
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
 
         JPanel opponentCard = createCardPanel(PANEL_ALT);
@@ -184,15 +208,19 @@ public class GamePanel extends JPanel {
         eventArea.setForeground(CREAM);
         eventArea.setBackground(new Color(10, 14, 22));
         eventArea.setFont(new Font("SansSerif", Font.PLAIN, 15));
+        eventArea.setRows(9);
+        eventArea.setColumns(26);
         eventArea.setMargin(new Insets(14, 14, 14, 14));
-        JScrollPane storyPane = new JScrollPane(eventArea);
+        storyPane = new JScrollPane(eventArea);
         storyPane.setAlignmentX(Component.LEFT_ALIGNMENT);
-        storyPane.setPreferredSize(new Dimension(320, 180));
-        storyPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
+        storyPane.setPreferredSize(new Dimension(336, 250));
+        storyPane.setMinimumSize(new Dimension(280, 220));
+        storyPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 320));
         storyPane.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(new Color(228, 190, 108), 1),
             BorderFactory.createEmptyBorder(4, 4, 4, 4)
         ));
+        styleScrollPane(storyPane);
         JLabel hintLabel = new JLabel("SPACE advances story and still handles quick-draw timing.");
         hintLabel.setForeground(MUTED);
         hintLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
@@ -212,6 +240,7 @@ public class GamePanel extends JPanel {
         sidebar.add(Box.createVerticalStrut(14));
         sidebar.add(statsCard);
         finishSidebar(statsCard, sidebar);
+        sidebar.add(Box.createVerticalGlue());
         return sidebar;
     }
 
@@ -324,6 +353,66 @@ public class GamePanel extends JPanel {
         ));
     }
 
+    private void styleScrollPane(JScrollPane scrollPane) {
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.getVerticalScrollBar().setBlockIncrement(48);
+        scrollPane.getVerticalScrollBar().setOpaque(true);
+        scrollPane.getVerticalScrollBar().setUI(new ModernScrollBarUI());
+        scrollPane.getHorizontalScrollBar().setOpaque(true);
+        scrollPane.getHorizontalScrollBar().setUI(new ModernScrollBarUI());
+        scrollPane.getViewport().setBackground(new Color(10, 14, 22));
+    }
+
+    @Override
+    public void doLayout() {
+        applyResponsiveLayout();
+        super.doLayout();
+    }
+
+    private void applyResponsiveLayout() {
+        int width = Math.max(1080, getWidth());
+        int height = Math.max(760, getHeight());
+        int sidebarWidth = clamp(width / 4, 330, 430);
+        int storyHeight = clamp(height / 4, 220, 320);
+
+        if (sidebarPanel != null) {
+            sidebarPanel.setPreferredSize(new Dimension(sidebarWidth, Math.max(620, height - 120)));
+        }
+        if (sidebarScrollPane != null) {
+            sidebarScrollPane.setPreferredSize(new Dimension(sidebarWidth + 12, Math.max(540, height - 120)));
+        }
+        if (storyPane != null) {
+            int paneWidth = Math.max(280, sidebarWidth - 40);
+            storyPane.setPreferredSize(new Dimension(paneWidth, storyHeight));
+            storyPane.setMinimumSize(new Dimension(paneWidth, 210));
+            storyPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, storyHeight));
+        }
+
+        int titleSize = clamp(width / 34, 32, 46);
+        int subtitleSize = clamp(width / 96, 13, 16);
+        int noteSize = clamp(width / 120, 11, 13);
+        int sideTitleSize = clamp(width / 54, 24, 30);
+        int bodyTextSize = clamp(width / 98, 14, 16);
+        int buttonSize = clamp(width / 104, 13, 15);
+
+        titleLabel.setFont(new Font("Serif", Font.BOLD, titleSize));
+        subtitleLabel.setFont(new Font("SansSerif", Font.PLAIN, subtitleSize));
+        displayNoteLabel.setFont(new Font("SansSerif", Font.BOLD, noteSize));
+        headerMetaLabel.setFont(new Font("SansSerif", Font.BOLD, noteSize + 1));
+        opponentLabel.setFont(new Font("Serif", Font.BOLD, sideTitleSize));
+        opponentLineLabel.setFont(new Font("SansSerif", Font.PLAIN, bodyTextSize));
+        statusLabel.setFont(new Font("SansSerif", Font.BOLD, bodyTextSize));
+        eventArea.setFont(new Font("SansSerif", Font.PLAIN, bodyTextSize));
+        betField.setFont(new Font("SansSerif", Font.BOLD, Math.max(17, bodyTextSize + 2)));
+
+        for (JButton button : new JButton[]{
+            dealButton, hitButton, standButton, doubleButton,
+            splitButton, cheatButton, duelButton, resetButton, tutorialButton
+        }) {
+            button.setFont(new Font("SansSerif", Font.BOLD, buttonSize));
+        }
+    }
+
     private void bindActions() {
         dealButton.addActionListener(event -> {
             controller.setBetAndDeal(parseBet());
@@ -396,8 +485,8 @@ public class GamePanel extends JPanel {
 
         currentSnapshot = controller.getSnapshot();
         opponentLabel.setText(currentSnapshot.opponentName());
-        opponentLineLabel.setText(wrapHtml(currentSnapshot.opponentLine(), 280));
-        statusLabel.setText(wrapHtml(currentSnapshot.statusText(), 300));
+        opponentLineLabel.setText(wrapHtml(currentSnapshot.opponentLine(), sidebarWrapWidth() - 20));
+        statusLabel.setText(wrapHtml(currentSnapshot.statusText(), sidebarWrapWidth()));
         subtitleLabel.setText(buildSubtitle(currentSnapshot));
         headerMetaLabel.setText("<html><div style='text-align:right'>Facing "
             + escapeHtml(currentSnapshot.opponentName())
@@ -453,6 +542,11 @@ public class GamePanel extends JPanel {
         tableCanvas.repaint();
         revalidate();
         repaint();
+    }
+
+    private int sidebarWrapWidth() {
+        int width = sidebarPanel == null || sidebarPanel.getWidth() <= 0 ? 360 : sidebarPanel.getWidth();
+        return clamp(width - 56, 240, 360);
     }
 
     private String buildSubtitle(GameSnapshot snapshot) {
@@ -556,6 +650,9 @@ public class GamePanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(tutorialArea);
         scrollPane.setPreferredSize(new Dimension(680, 520));
+        styleScrollPane(scrollPane);
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(228, 190, 108), 1));
+        scrollPane.getViewport().setBackground(new Color(248, 242, 231));
 
         JOptionPane.showMessageDialog(
             frame,
@@ -570,7 +667,7 @@ public class GamePanel extends JPanel {
             WELCOME TO BLACKJACK SALOON
 
             Display note:
-            This game is best experienced maximized or fullscreen so the table layout, cards, and side panels have enough room.
+            The layout now scales with the window, though fullscreen still gives the cleanest view of the whole table.
 
             Your goal:
             Beat the dealer without going over 21. Number cards are worth their number. Face cards count as 10. Aces count as 11 unless that would bust your hand, then they count as 1.
@@ -653,6 +750,70 @@ public class GamePanel extends JPanel {
         return "<html><div style='width:" + width + "px'>" + escapeHtml(text).replace("\n", "<br>") + "</div></html>";
     }
 
+    private int clamp(int value, int minimum, int maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    private static class ModernScrollBarUI extends BasicScrollBarUI {
+        @Override
+        protected void configureScrollBarColors() {
+            thumbColor = new Color(122, 154, 214);
+            thumbDarkShadowColor = thumbColor;
+            thumbHighlightColor = thumbColor;
+            thumbLightShadowColor = thumbColor;
+            trackColor = new Color(16, 21, 31);
+            trackHighlightColor = trackColor;
+        }
+
+        @Override
+        protected JButton createDecreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        @Override
+        protected JButton createIncreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        private JButton createZeroButton() {
+            JButton button = new JButton();
+            button.setPreferredSize(new Dimension(0, 0));
+            button.setMinimumSize(new Dimension(0, 0));
+            button.setMaximumSize(new Dimension(0, 0));
+            button.setOpaque(false);
+            button.setContentAreaFilled(false);
+            button.setBorder(BorderFactory.createEmptyBorder());
+            return button;
+        }
+
+        @Override
+        protected void paintTrack(Graphics graphics, JComponent component, Rectangle trackBounds) {
+            Graphics2D g2 = (Graphics2D) graphics.create();
+            g2.setColor(new Color(16, 21, 31));
+            g2.fillRoundRect(trackBounds.x + 2, trackBounds.y, trackBounds.width - 4, trackBounds.height, 10, 10);
+            g2.dispose();
+        }
+
+        @Override
+        protected void paintThumb(Graphics graphics, JComponent component, Rectangle thumbBounds) {
+            if (thumbBounds.isEmpty() || !scrollbar.isEnabled()) {
+                return;
+            }
+            Graphics2D g2 = (Graphics2D) graphics.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(new Color(122, 154, 214));
+            g2.fillRoundRect(thumbBounds.x + 2, thumbBounds.y + 2, thumbBounds.width - 4, thumbBounds.height - 4, 12, 12);
+            g2.setColor(new Color(228, 190, 108, 120));
+            g2.drawRoundRect(thumbBounds.x + 2, thumbBounds.y + 2, thumbBounds.width - 5, thumbBounds.height - 5, 12, 12);
+            g2.dispose();
+        }
+
+        @Override
+        protected Dimension getMinimumThumbSize() {
+            return new Dimension(10, 36);
+        }
+    }
+
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
@@ -689,7 +850,7 @@ public class GamePanel extends JPanel {
         g2.drawString(title, (getWidth() - titleWidth) / 2, centerY);
         g2.setColor(CREAM);
         g2.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        String line = "Best experienced maximized or fullscreen. The room settles in a moment.";
+        String line = "The layout scales with the window. The room settles in a moment.";
         int lineWidth = g2.getFontMetrics().stringWidth(line);
         g2.drawString(line, (getWidth() - lineWidth) / 2, centerY + 40);
         g2.dispose();
@@ -763,21 +924,27 @@ public class GamePanel extends JPanel {
 
             Graphics2D g2 = (Graphics2D) graphics.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(new Color(24, 18, 30));
+            g2.fillRect(0, 0, getWidth(), getHeight());
 
             int w = getWidth();
             int h = getHeight();
-            int stageX = 18;
-            int stageY = 22;
-            int stageW = w - 36;
-            int stageH = h - 38;
+            double scale = Math.min((w - 40) / 930.0, (h - 78) / 760.0);
+            scale = Math.max(0.58, scale);
+            int stageW = (int) Math.round(930 * scale);
+            int stageH = (int) Math.round(760 * scale);
+            int stageX = (w - stageW) / 2;
+            int stageY = Math.max(8, h - stageH - 10);
 
+            g2.translate(stageX, stageY);
+            g2.scale(scale, scale);
             g2.setComposite(AlphaComposite.SrcOver.derive(0.22f));
             g2.setColor(Color.BLACK);
-            g2.fillRoundRect(stageX + 10, stageY + 16, stageW, stageH, 54, 54);
+            g2.fillRoundRect(10, 16, 930, 760, 54, 54);
             g2.setComposite(AlphaComposite.SrcOver);
 
-            drawRoomBackdrop(g2, stageX, stageY, stageW, stageH);
-            drawTablePerspective(g2, stageX, stageY, stageW, stageH);
+            drawRoomBackdrop(g2, 0, 0, 930, 760);
+            drawTablePerspective(g2, 0, 0, 930, 760);
             g2.dispose();
         }
 
@@ -796,20 +963,22 @@ public class GamePanel extends JPanel {
 
             int backBarY = y + 36;
             g2.setColor(new Color(22, 17, 25, 170));
-            g2.fillRoundRect(x + 90, backBarY, width - 180, 58, 24, 24);
+            g2.fillRoundRect(x + 130, backBarY, width - 260, 54, 24, 24);
             g2.setColor(new Color(232, 193, 108, 95));
-            g2.drawRoundRect(x + 90, backBarY, width - 180, 58, 24, 24);
-            g2.setFont(new Font("Serif", Font.BOLD, 24));
+            g2.drawRoundRect(x + 130, backBarY, width - 260, 54, 24, 24);
+            g2.setFont(new Font("Serif", Font.BOLD, 20));
             g2.setColor(CREAM);
-            g2.drawString(currentSnapshot.opponentName() + " across the rail", x + 122, backBarY + 38);
+            String banner = "Facing " + currentSnapshot.opponentName();
+            int bannerWidth = g2.getFontMetrics().stringWidth(banner);
+            g2.drawString(banner, x + width / 2 - bannerWidth / 2, backBarY + 35);
         }
 
         private void drawTablePerspective(Graphics2D g2, int x, int y, int width, int height) {
-            int railX = x + 12;
-            int railY = y + 110;
-            int railW = width - 24;
-            int railH = height + 430;
-            int feltInset = 22;
+            int railX = x + 42;
+            int railY = y + 132;
+            int railW = width - 84;
+            int railH = height + 300;
+            int feltInset = 20;
 
             g2.setPaint(new GradientPaint(railX, railY, new Color(132, 77, 41), railX, railY + 180, TABLE_EDGE));
             g2.fillArc(railX, railY, railW, railH, 0, 180);
@@ -827,12 +996,12 @@ public class GamePanel extends JPanel {
             int radiusX = railW / 2 - 36;
             int radiusY = railH / 2 - 48;
 
-            drawTableBranding(g2, centerX, y + 332);
+            drawTableBranding(g2, centerX, y + 350);
             drawRailPlayers(g2, centerX, centerY, radiusX, radiusY);
-            drawDealerReach(g2, centerX, y + 132);
-            drawPotZone(g2, centerX, y + 382);
+            drawDealerReach(g2, centerX, y + 150);
+            drawPotZone(g2, centerX, y + 396);
             drawHandZone(g2, x, y, width, height, centerX);
-            drawPrompt(g2, centerX, y + height - 34);
+            drawPrompt(g2, centerX, y + height - 74);
         }
 
         private void drawTableBranding(Graphics2D g2, int centerX, int centerY) {
@@ -864,22 +1033,15 @@ public class GamePanel extends JPanel {
             Point chipSpot = pointOnEllipse(centerX, centerY, radiusX - 130, radiusY - 110, angleDegrees);
             Point cardSpot = pointOnEllipse(centerX, centerY, radiusX - 80, radiusY - 70, angleDegrees);
 
-            drawRailCharacter(g2, seat.x, seat.y - 20, coatColor, name, highlight);
+            drawRailCharacter(g2, seat.x, seat.y - 20, coatColor);
             drawBetRing(g2, chipSpot.x, chipSpot.y, highlight ? 30 : 24);
             drawChipStack(g2, chipSpot.x - 18, chipSpot.y - 8, highlight ? new Color(222, 183, 88) : new Color(194, 72, 56), chipCount);
 
             List<String> cards = dealerCards ? parseCards(currentSnapshot.dealerCards()) : List.of("10", "8");
             drawCardFan(g2, cards, cardSpot.x, cardSpot.y, dealerCards ? 72 : 60, dealerCards ? 98 : 84, 18);
-
-            if (highlight) {
-                g2.setColor(new Color(255, 228, 152, 140));
-                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
-                int nameWidth = g2.getFontMetrics().stringWidth(name);
-                g2.drawString(name, seat.x - nameWidth / 2, seat.y - 90);
-            }
         }
 
-        private void drawRailCharacter(Graphics2D g2, int x, int y, Color coatColor, String name, boolean highlight) {
+        private void drawRailCharacter(Graphics2D g2, int x, int y, Color coatColor) {
             g2.setColor(new Color(0, 0, 0, 70));
             g2.fillOval(x - 52, y - 18, 104, 30);
 
@@ -891,11 +1053,6 @@ public class GamePanel extends JPanel {
             g2.fillOval(x - 16, y - 64, 32, 34);
             g2.setColor(new Color(28, 20, 17));
             g2.drawOval(x - 16, y - 64, 32, 34);
-
-            g2.setColor(highlight ? GOLD : new Color(220, 211, 195, 180));
-            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
-            int nameWidth = g2.getFontMetrics().stringWidth(name);
-            g2.drawString(name, x - nameWidth / 2, y + 44);
         }
 
         private void drawDealerReach(Graphics2D g2, int centerX, int topY) {
@@ -964,13 +1121,13 @@ public class GamePanel extends JPanel {
 
         private void drawHandZone(Graphics2D g2, int x, int y, int width, int height, int centerX) {
             drawPlayerHands(g2, x, y, width, height, centerX);
-            drawPlayerFists(g2, centerX, y + height - 32);
+            drawPlayerFists(g2, centerX, y + height - 124);
         }
 
         private void drawPlayerHands(Graphics2D g2, int x, int y, int width, int height, int centerX) {
             List<String> hands = currentSnapshot.playerHands();
             int count = Math.max(1, hands.size());
-            int cardZoneY = y + height - 132;
+            int cardZoneY = y + height - 224;
             int spread = count == 1 ? 0 : 210;
 
             for (int i = 0; i < count; i++) {
@@ -980,11 +1137,11 @@ public class GamePanel extends JPanel {
                 int value = i < currentSnapshot.playerValues().size() ? currentSnapshot.playerValues().get(i) : 0;
                 List<String> cards = i < hands.size() ? parseCards(hands.get(i)) : List.of();
 
-                drawBetRing(g2, handCenter, y + height - 190, active ? 36 : 30);
+                drawBetRing(g2, handCenter, y + height - 276, active ? 36 : 30);
                 drawCardFan(g2, cards, handCenter, cardZoneY, 74, 102, 18);
-                drawBadge(g2, "Bet $" + bet, handCenter - 56, y + height - 246, 112, 26,
+                drawBadge(g2, "Bet $" + bet, handCenter - 56, y + height - 334, 112, 26,
                     active ? new Color(223, 186, 104) : new Color(77, 50, 31), active ? new Color(32, 24, 18) : GOLD);
-                drawBadge(g2, "Value " + value, handCenter - 56, y + height - 54, 112, 24,
+                drawBadge(g2, "Value " + value, handCenter - 56, y + height - 154, 112, 24,
                     new Color(13, 20, 28, 215), CREAM);
             }
         }
