@@ -29,6 +29,10 @@ public abstract class Participant {
     }
 
     public void addHand(Hand hand) {
-        hands.add(hand);
+        addHand(hands.size(), hand);
+    }
+
+    public void addHand(int index, Hand hand) {
+        hands.add(index, hand);
     }
 }

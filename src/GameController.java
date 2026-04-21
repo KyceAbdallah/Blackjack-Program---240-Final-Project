@@ -16,6 +16,12 @@ public class GameController {
         new OpponentProfile("The Shady Gambler", "Three hot hands in a row and I start askin' questions.", 9, 2, 170),
         new OpponentProfile("Sheriff Boone", "Play it clean and we won't have trouble.", 7, 2, 145)
     );
+    private final List<RailPatron> railPatrons = List.of(
+        new RailPatron("Lucky Len", 280, 20, RailStyle.BOLD),
+        new RailPatron("Velvet Ruth", 360, 35, RailStyle.CONSERVATIVE),
+        new RailPatron("Tin Cup Nora", 240, 15, RailStyle.OPPORTUNIST),
+        new RailPatron("Doc Mercer", 320, 25, RailStyle.BALANCED)
+    );
 
     private OpponentProfile currentOpponent;
     private int wins;
@@ -43,6 +49,7 @@ public class GameController {
         eventText = currentOpponent.getName()
             + " sits down across from you.\n\n"
             + currentOpponent.getIntroLine()
+            + "\n\nFour regulars are already splashing chips around the rail."
             + "\n\nFake money only. Real ego damage still applies.";
     }
 
@@ -50,9 +57,13 @@ public class GameController {
         List<String> handDescriptions = new ArrayList<>();
         List<Integer> handValues = new ArrayList<>();
         List<Integer> handBets = new ArrayList<>(player.getHandBets());
+        List<RailSeatSnapshot> railSeats = new ArrayList<>();
         for (Hand hand : player.getHands()) {
             handDescriptions.add(hand.describe(true));
             handValues.add(hand.getValue());
+        }
+        for (RailPatron railPatron : railPatrons) {
+            railSeats.add(railPatron.snapshot());
         }
         while (handBets.size() < handDescriptions.size()) {
             handBets.add(0);
@@ -69,6 +80,7 @@ public class GameController {
             dealerCards,
             dealerVisibleValue,
             dealerHand.getValue(),
+            railSeats,
             handDescriptions,
             handValues,
             handBets,
@@ -85,8 +97,8 @@ public class GameController {
             roundActive,
             roundResolved,
             !loading && !roundActive,
-            roundActive,
-            roundActive,
+            canHit(),
+            canStand(),
             canDouble(),
             canSplit(),
             canCheat(),
@@ -114,17 +126,25 @@ public class GameController {
         activeHandIndex = 0;
         roundActive = true;
         roundResolved = false;
+        prepareRailRound();
 
         Hand playerHand = player.getPrimaryHand();
         Hand dealerHand = dealer.getPrimaryHand();
         player.placeBaseBet(bet);
-        playerHand.addCard(shoe.deal());
-        dealerHand.addCard(shoe.deal());
-        playerHand.addCard(shoe.deal());
-        dealerHand.addCard(shoe.deal());
+        for (int i = 0; i < 2; i++) {
+            for (RailPatron railPatron : railPatrons) {
+                railPatron.deal(shoe);
+            }
+            playerHand.addCard(shoe.deal());
+            dealerHand.addCard(shoe.deal());
+        }
+        int dealerUpCard = dealerHand.getCards().get(0).getValue();
+        for (RailPatron railPatron : railPatrons) {
+            railPatron.playRound(shoe, dealerUpCard, random);
+        }
 
         statusText = "Cards dealt with a hard wooden clack.";
-        eventText = "Dealer shows " + dealerHand.getCards().get(0) + ".";
+        eventText = "Dealer shows " + dealerHand.getCards().get(0) + ".\n\nRail watch: " + buildRailSummary();
 
         if (playerHand.isBlackjack() || dealerHand.isBlackjack()) {
             resolveRound();
@@ -132,7 +152,7 @@ public class GameController {
     }
 
     public void hit() {
-        if (!roundActive) {
+        if (!canHit()) {
             return;
         }
         Hand hand = player.getHands().get(activeHandIndex);
@@ -145,16 +165,16 @@ public class GameController {
     }
 
     public void stand() {
-        if (!roundActive) {
+        if (!canStand()) {
             return;
         }
-        for (Hand hand : player.getHands()) {
-            hand.stand();
-        }
-        while (dealer.shouldHit()) {
-            dealer.getPrimaryHand().addCard(shoe.deal());
-        }
-        resolveRound();
+        Hand hand = player.getHands().get(activeHandIndex);
+        hand.stand();
+        statusText = "You hold on hand " + (activeHandIndex + 1) + ".";
+        eventText = player.getHands().size() > 1
+            ? "Hand " + (activeHandIndex + 1) + " is locked in."
+            : "Dealer reaches for the shoe.";
+        moveToNextHandOrDealer();
     }
 
     public void doubleDown() {
@@ -177,11 +197,13 @@ public class GameController {
         Card moved = first.removeSecondCard();
         Hand second = new Hand();
         second.addCard(moved);
-        player.addHand(second);
+        player.addHand(activeHandIndex + 1, second);
         player.splitBet();
         first.addCard(shoe.deal());
         second.addCard(shoe.deal());
         statusText = "Two hands. Twice the trouble.";
+        eventText = "Split complete. Play hand " + (activeHandIndex + 1)
+            + " of " + player.getHands().size() + ".";
     }
 
     public void cheat() {
@@ -189,11 +211,25 @@ public class GameController {
             return;
         }
         Hand hand = player.getHands().get(activeHandIndex);
-        hand.replaceLowestCard(shoe.dealCheatCard());
+        Hand.CheatSwap cheatSwap = hand.findBestCheatSwap();
+        if (cheatSwap == null) {
+            return;
+        }
+        hand.replaceCard(cheatSwap.index(), cheatSwap.replacement());
         int suspicionSpike = 14 + currentOpponent.getSuspicionSensitivity();
         player.addSuspicion(suspicionSpike);
-        statusText = "Ace up the sleeve.";
-        eventText = "The room notices. Suspicion rises by " + suspicionSpike + ".";
+        statusText = "You lean the hand toward 21.";
+        eventText = "You swap "
+            + cheatSwap.original()
+            + " for "
+            + cheatSwap.replacement()
+            + ", moving the hand from "
+            + cheatSwap.valueBefore()
+            + " to "
+            + cheatSwap.valueAfter()
+            + ". Suspicion rises by "
+            + suspicionSpike
+            + ".";
     }
 
     public void startDuelSequence() {
@@ -218,6 +254,9 @@ public class GameController {
         currentOpponent = randomOpponent();
         statusText = "Fresh bankroll. Fresh lies.";
         eventText = "High scores wiped from the chalkboard.";
+        for (RailPatron railPatron : railPatrons) {
+            railPatron.resetSession();
+        }
         saveManager.save(player, wins, losses);
     }
 
@@ -225,6 +264,10 @@ public class GameController {
         while (activeHandIndex < player.getHands().size()) {
             Hand current = player.getHands().get(activeHandIndex);
             if (!current.hasStood() && !current.isBust() && !current.isDoubledDown() && current.getValue() < 21) {
+                if (player.getHands().size() > 1) {
+                    statusText = "Hand " + (activeHandIndex + 1) + " is live.";
+                    eventText = "Play hand " + (activeHandIndex + 1) + " of " + player.getHands().size() + ".";
+                }
                 return;
             }
             activeHandIndex++;
@@ -246,6 +289,9 @@ public class GameController {
         boolean dealerBust = dealerHand.isBust();
         StringBuilder summary = new StringBuilder();
         boolean anyLoss = false;
+        for (RailPatron railPatron : railPatrons) {
+            railPatron.settleAgainst(dealerHand);
+        }
 
         for (int i = 0; i < player.getHands().size(); i++) {
             Hand hand = player.getHands().get(i);
@@ -288,14 +334,14 @@ public class GameController {
         }
 
         statusText = summary.toString();
-        eventText = "Press Deal for the next hand.";
+        eventText = "Press Deal for the next hand.\n\nRail watch: " + buildRailSummary();
         player.coolSuspicion(anyLoss ? 8 : 4);
 
         if (player.getBankroll() < MIN_BET) {
             player.adjustBankroll(150);
-            eventText = "The bartender fronts you $150 to keep the game alive.";
+            eventText += "\n\nThe bartender fronts you $150 to keep the game alive.";
         } else if (player.getStreak() >= 3) {
-            eventText = "A fresh opponent steps in while the old one drags the table upright.";
+            eventText += "\n\nA fresh opponent steps in while the old one drags the table upright.";
             currentOpponent = randomOpponent();
         }
         saveManager.save(player, wins, losses);
@@ -318,15 +364,44 @@ public class GameController {
     }
 
     private boolean canSplit() {
-        return false;
+        if (!roundActive || activeHandIndex >= player.getHands().size()) {
+            return false;
+        }
+        Hand hand = player.getHands().get(activeHandIndex);
+        return hand.canSplit() && player.getBankroll() >= player.getBetForHand(activeHandIndex);
     }
 
     private boolean canCheat() {
         return roundActive && activeHandIndex < player.getHands().size() && player.getSuspicion() < 100;
     }
 
+    private boolean canHit() {
+        return roundActive && activeHandIndex < player.getHands().size();
+    }
+
+    private boolean canStand() {
+        return canHit();
+    }
+
     private OpponentProfile randomOpponent() {
         return opponents.get(random.nextInt(opponents.size()));
+    }
+
+    private void prepareRailRound() {
+        for (RailPatron railPatron : railPatrons) {
+            railPatron.openRound(random);
+        }
+    }
+
+    private String buildRailSummary() {
+        StringBuilder builder = new StringBuilder();
+        for (RailPatron railPatron : railPatrons) {
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(railPatron.getSummary());
+        }
+        return builder.toString();
     }
 
 }

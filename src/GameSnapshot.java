@@ -6,6 +6,7 @@ public record GameSnapshot(
     String dealerCards,
     int dealerVisibleValue,
     int dealerFinalValue,
+    List<RailSeatSnapshot> railSeats,
     List<String> playerHands,
     List<Integer> playerValues,
     List<Integer> handBets,

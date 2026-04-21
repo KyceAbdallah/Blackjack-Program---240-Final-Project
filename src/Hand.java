@@ -3,6 +3,15 @@ import java.util.Collections;
 import java.util.List;
 
 public class Hand {
+    public record CheatSwap(
+        int index,
+        Card original,
+        Card replacement,
+        int valueBefore,
+        int valueAfter
+    ) {
+    }
+
     private final List<Card> cards = new ArrayList<>();
     private boolean stood;
     private boolean doubledDown;
@@ -47,6 +56,10 @@ public class Hand {
         return cards.remove(1);
     }
 
+    public void replaceCard(int index, Card replacement) {
+        cards.set(index, replacement);
+    }
+
     public void replaceLowestCard(Card replacement) {
         if (cards.isEmpty()) {
             cards.add(replacement);
@@ -59,6 +72,30 @@ public class Hand {
             }
         }
         cards.set(lowestIndex, replacement);
+    }
+
+    public CheatSwap findBestCheatSwap() {
+        if (cards.isEmpty()) {
+            return null;
+        }
+
+        int currentValue = getValue();
+        CheatSwap best = null;
+        for (int i = 0; i < cards.size(); i++) {
+            Card original = cards.get(i);
+            for (Rank rank : Rank.values()) {
+                if (rank == original.getRank()) {
+                    continue;
+                }
+                Card replacement = new Card(original.getSuit(), rank);
+                int candidateValue = valueWithReplacement(i, replacement);
+                CheatSwap candidate = new CheatSwap(i, original, replacement, currentValue, candidateValue);
+                if (isBetterCheat(candidate, best)) {
+                    best = candidate;
+                }
+            }
+        }
+        return best;
     }
 
     public boolean hasStood() {
@@ -93,5 +130,50 @@ public class Hand {
             }
         }
         return builder.toString();
+    }
+
+    private int valueWithReplacement(int replaceIndex, Card replacement) {
+        int total = 0;
+        int aces = 0;
+        for (int i = 0; i < cards.size(); i++) {
+            Card card = i == replaceIndex ? replacement : cards.get(i);
+            total += card.getValue();
+            if (card.getRank() == Rank.ACE) {
+                aces++;
+            }
+        }
+        while (total > 21 && aces > 0) {
+            total -= 10;
+            aces--;
+        }
+        return total;
+    }
+
+    private boolean isBetterCheat(CheatSwap candidate, CheatSwap best) {
+        if (best == null) {
+            return true;
+        }
+
+        int candidateDiff = Math.abs(21 - candidate.valueAfter());
+        int bestDiff = Math.abs(21 - best.valueAfter());
+        if (candidateDiff != bestDiff) {
+            return candidateDiff < bestDiff;
+        }
+
+        boolean candidateBust = candidate.valueAfter() > 21;
+        boolean bestBust = best.valueAfter() > 21;
+        if (candidateBust != bestBust) {
+            return !candidateBust;
+        }
+
+        if (!candidateBust && candidate.valueAfter() != best.valueAfter()) {
+            return candidate.valueAfter() > best.valueAfter();
+        }
+
+        if (candidateBust && candidate.valueAfter() != best.valueAfter()) {
+            return candidate.valueAfter() < best.valueAfter();
+        }
+
+        return candidate.replacement().getValue() > best.replacement().getValue();
     }
 }

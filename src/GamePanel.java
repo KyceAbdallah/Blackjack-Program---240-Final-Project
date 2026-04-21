@@ -13,12 +13,14 @@ import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.KeyEvent;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -33,10 +35,10 @@ import javax.swing.JScrollPane;
 import javax.swing.JScrollBar;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import javax.swing.JButton;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 
 public class GamePanel extends JPanel {
@@ -138,6 +140,7 @@ public class GamePanel extends JPanel {
         styleScrollPane(sidebarScrollPane);
         body.add(sidebarScrollPane, BorderLayout.EAST);
         add(body, BorderLayout.CENTER);
+        add(buildControlDock(), BorderLayout.SOUTH);
     }
 
     private JPanel buildHeader() {
@@ -287,11 +290,60 @@ public class GamePanel extends JPanel {
             BorderFactory.createEmptyBorder(1, 1, 1, 1)
         ));
         statsCard.add(suspicionBar);
+        JPanel controlTipCard = createCardPanel(PANEL_ALT);
+        controlTipCard.add(sectionLabel("Controls"));
+        controlTipCard.add(Box.createVerticalStrut(10));
+        JLabel controlTip = new JLabel(
+            "<html><div style='width:290px'>Gameplay controls stay docked below the table so you can always deal, hit, or hold without hunting through the sidebar.</div></html>"
+        );
+        controlTip.setForeground(MUTED);
+        controlTip.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        controlTip.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel shortcutTip = new JLabel("Enter deal. H hit. S hold. D double. P split. C cheat.");
+        shortcutTip.setForeground(GOLD);
+        shortcutTip.setFont(new Font("SansSerif", Font.BOLD, 12));
+        shortcutTip.setAlignmentX(Component.LEFT_ALIGNMENT);
+        controlTipCard.add(controlTip);
+        controlTipCard.add(Box.createVerticalStrut(10));
+        controlTipCard.add(shortcutTip);
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(controlTipCard);
+    }
 
-        JPanel betCard = createCardPanel(PANEL_ALT);
-        betCard.add(sectionLabel("Betting Window"));
-        betCard.add(Box.createVerticalStrut(10));
-        betField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+    private JPanel buildControlDock() {
+        JPanel dock = new JPanel(new BorderLayout(18, 12));
+        dock.setOpaque(true);
+        dock.setBackground(PANEL);
+        dock.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(228, 190, 108, 110), 1),
+            BorderFactory.createEmptyBorder(14, 16, 14, 16)
+        ));
+
+        JPanel header = new JPanel(new BorderLayout(12, 8));
+        header.setOpaque(false);
+        JLabel controlTitle = new JLabel("TABLE CONTROLS");
+        controlTitle.setForeground(GOLD);
+        controlTitle.setFont(new Font("SansSerif", Font.BOLD, 14));
+        JLabel controlHint = new JLabel("Enter = Deal   H = Hit   S = Hold   D = Double   P = Split   C = Cheat");
+        controlHint.setForeground(MUTED);
+        controlHint.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        styleButton(tutorialButton, new Color(38, 46, 68), CREAM);
+        tutorialButton.setText("How To Play");
+        tutorialButton.setPreferredSize(new Dimension(148, 40));
+        header.add(controlTitle, BorderLayout.WEST);
+        header.add(controlHint, BorderLayout.CENTER);
+        header.add(tutorialButton, BorderLayout.EAST);
+
+        JPanel content = new JPanel(new BorderLayout(18, 0));
+        content.setOpaque(false);
+
+        JPanel betPanel = new JPanel();
+        betPanel.setOpaque(false);
+        betPanel.setLayout(new BoxLayout(betPanel, BoxLayout.Y_AXIS));
+        JLabel wagerLabel = sectionLabel("Wager");
+        wagerLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        betField.setMaximumSize(new Dimension(220, 40));
+        betField.setPreferredSize(new Dimension(220, 40));
         betField.setFont(new Font("SansSerif", Font.BOLD, 18));
         betField.setForeground(new Color(28, 23, 18));
         betField.setBackground(new Color(246, 239, 226));
@@ -301,24 +353,18 @@ public class GamePanel extends JPanel {
             BorderFactory.createEmptyBorder(8, 10, 8, 10)
         ));
         betField.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel betHint = new JLabel("Set the wager, then deal into the next hand.");
+        JLabel betHint = new JLabel("Type a bet, then press Enter or Deal In.");
         betHint.setForeground(MUTED);
         betHint.setFont(new Font("SansSerif", Font.PLAIN, 12));
         betHint.setAlignmentX(Component.LEFT_ALIGNMENT);
-        betCard.add(betField);
-        betCard.add(Box.createVerticalStrut(10));
-        betCard.add(betHint);
+        betPanel.add(wagerLabel);
+        betPanel.add(Box.createVerticalStrut(8));
+        betPanel.add(betField);
+        betPanel.add(Box.createVerticalStrut(8));
+        betPanel.add(betHint);
 
-        JPanel actionsCard = createCardPanel(PANEL);
-        actionsCard.add(sectionLabel("Actions"));
-        actionsCard.add(Box.createVerticalStrut(10));
-        styleButton(tutorialButton, new Color(38, 46, 68), CREAM);
-        tutorialButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-        tutorialButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
-        actionsCard.add(tutorialButton);
-        actionsCard.add(Box.createVerticalStrut(10));
-        JPanel buttonGrid = new JPanel(new GridLayout(4, 2, 10, 10));
-        buttonGrid.setOpaque(false);
+        JPanel actionGrid = new JPanel(new GridLayout(2, 4, 10, 10));
+        actionGrid.setOpaque(false);
         styleButton(dealButton, GOLD, new Color(41, 29, 18));
         styleButton(hitButton, new Color(60, 109, 191), CREAM);
         styleButton(standButton, new Color(72, 131, 99), CREAM);
@@ -331,14 +377,15 @@ public class GamePanel extends JPanel {
             dealButton, hitButton, standButton, doubleButton,
             splitButton, cheatButton, duelButton, resetButton
         }) {
-            buttonGrid.add(button);
+            actionGrid.add(button);
         }
-        actionsCard.add(buttonGrid);
 
-        sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(betCard);
-        sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(actionsCard);
+        content.add(betPanel, BorderLayout.WEST);
+        content.add(actionGrid, BorderLayout.CENTER);
+
+        dock.add(header, BorderLayout.NORTH);
+        dock.add(content, BorderLayout.CENTER);
+        return dock;
     }
 
     private void styleButton(JButton button, Color background, Color foreground) {
@@ -414,41 +461,20 @@ public class GamePanel extends JPanel {
     }
 
     private void bindActions() {
-        dealButton.addActionListener(event -> {
-            controller.setBetAndDeal(parseBet());
-            soundManager.playEffect("card-clack.wav");
-            refresh(true);
-        });
-        hitButton.addActionListener(event -> {
-            controller.hit();
-            soundManager.playEffect("card-clack.wav");
-            refresh(true);
-        });
-        standButton.addActionListener(event -> {
-            controller.stand();
-            refresh(true);
-        });
-        doubleButton.addActionListener(event -> {
-            controller.doubleDown();
-            soundManager.playEffect("card-clack.wav");
-            refresh(true);
-        });
-        splitButton.addActionListener(event -> {
-            controller.split();
-            soundManager.playEffect("card-clack.wav");
-            refresh(true);
-        });
-        cheatButton.addActionListener(event -> {
-            controller.cheat();
-            soundManager.playEffect("card-clack.wav");
-            refresh(true);
-        });
+        dealButton.addActionListener(event -> handleDeal());
+        hitButton.addActionListener(event -> handleHit());
+        standButton.addActionListener(event -> handleStand());
+        doubleButton.addActionListener(event -> handleDoubleDown());
+        splitButton.addActionListener(event -> handleSplit());
+        cheatButton.addActionListener(event -> handleCheat());
         tutorialButton.addActionListener(event -> showTutorialDialog());
         duelButton.addActionListener(event -> fireDuelDraw());
-        resetButton.addActionListener(event -> {
-            controller.resetSave();
-            refresh(true);
-        });
+        resetButton.addActionListener(event -> handleReset());
+        betField.addActionListener(event -> handleDeal());
+        registerKeyboardShortcuts();
+        if (frame.getRootPane() != null) {
+            frame.getRootPane().setDefaultButton(dealButton);
+        }
     }
 
     public boolean hasPendingNarrative() {
@@ -494,8 +520,11 @@ public class GamePanel extends JPanel {
             + " / Suspicion " + currentSnapshot.suspicion() + "%"
             + "</div></html>");
 
+        int playerPot = currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum();
+        int railPot = currentSnapshot.railSeats().stream().mapToInt(RailSeatSnapshot::bet).sum();
+        int tablePot = playerPot + railPot;
         bankrollLabel.setText("Bankroll: $" + currentSnapshot.bankroll());
-        potLabel.setText("Pot on felt: $" + currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum());
+        potLabel.setText("Pot on felt: $" + tablePot + "   You: $" + playerPot + "   Rail: $" + railPot);
         recordLabel.setText("Record: " + currentSnapshot.wins() + " - " + currentSnapshot.losses());
         streakLabel.setText("Current streak: " + currentSnapshot.streak() + "   Best: " + currentSnapshot.bestStreak());
         shoeLabel.setText("Cards left in shoe: " + currentSnapshot.shoeCards());
@@ -557,9 +586,9 @@ public class GamePanel extends JPanel {
             return snapshot.duelCanDraw() ? "Steel is out. Move now." : "The room freezes before the draw.";
         }
         if (snapshot.roundActive()) {
-            return "The hand is live. Read the table and press the right edge.";
+            return "The hand is live. Use the docked controls below the table or the keyboard shortcuts.";
         }
-        return "The next hand is yours to start when the bet window looks right.";
+        return "Set your wager in the controls below, then deal into the next hand.";
     }
 
     private void prepareNarrative(String text) {
@@ -668,6 +697,7 @@ public class GamePanel extends JPanel {
 
             Display note:
             The layout now scales with the window, though fullscreen still gives the cleanest view of the whole table.
+            The live gameplay controls stay docked below the table so they remain visible.
 
             Your goal:
             Beat the dealer without going over 21. Number cards are worth their number. Face cards count as 10. Aces count as 11 unless that would bust your hand, then they count as 1.
@@ -689,6 +719,10 @@ public class GamePanel extends JPanel {
             Draw: Used only during duel moments, if that system is active.
             Reset: Wipes your save progress and bankroll back to the default table state.
 
+            Keyboard shortcuts:
+            Enter deals using the current wager.
+            H hits, S holds, D doubles, P splits, and C cheats.
+
             How winning works:
             If your final value is higher than the dealer's without busting, you win.
             If the dealer busts and you do not, you win.
@@ -697,7 +731,7 @@ public class GamePanel extends JPanel {
 
             Tavern systems:
             Bankroll shows how much fake money you still have.
-            Pot on felt shows how much is currently committed in the hand.
+            Pot on felt shows how much is currently committed at the whole table, including the rail regulars.
             Suspicion rises when you cheat. High suspicion is dangerous in the saloon and can affect how the room reacts.
             Record and streak track your performance across hands.
             The Story panel delivers tavern flavor, warnings, and event text. Press SPACE to move through longer story beats.
@@ -712,10 +746,72 @@ public class GamePanel extends JPanel {
             The named opponent is the personality across the table.
             The center felt shows the live hand and the chips in play.
             The lower hand panel is your active hand area.
-            The right-side dashboard is your control booth for bets, status, and actions.
+            The right-side dashboard is your readout for story, stats, and suspicion.
+            The dock below the table is your control booth for bets and actions.
 
-            If you ever want this guide again, press the How To Play button in the Actions panel.
+            If you ever want this guide again, press the How To Play button in the control dock.
             """;
+    }
+
+    private void handleDeal() {
+        controller.setBetAndDeal(parseBet());
+        soundManager.playEffect("card-clack.wav");
+        refresh(true);
+    }
+
+    private void handleHit() {
+        controller.hit();
+        soundManager.playEffect("card-clack.wav");
+        refresh(true);
+    }
+
+    private void handleStand() {
+        controller.stand();
+        refresh(true);
+    }
+
+    private void handleDoubleDown() {
+        controller.doubleDown();
+        soundManager.playEffect("card-clack.wav");
+        refresh(true);
+    }
+
+    private void handleSplit() {
+        controller.split();
+        soundManager.playEffect("card-clack.wav");
+        refresh(true);
+    }
+
+    private void handleCheat() {
+        controller.cheat();
+        soundManager.playEffect("card-clack.wav");
+        refresh(true);
+    }
+
+    private void handleReset() {
+        controller.resetSave();
+        refresh(true);
+    }
+
+    private void registerKeyboardShortcuts() {
+        registerShortcut("deal-hand", KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), this::handleDeal);
+        registerShortcut("hit-hand", KeyStroke.getKeyStroke(KeyEvent.VK_H, 0), this::handleHit);
+        registerShortcut("stand-hand", KeyStroke.getKeyStroke(KeyEvent.VK_S, 0), this::handleStand);
+        registerShortcut("double-hand", KeyStroke.getKeyStroke(KeyEvent.VK_D, 0), this::handleDoubleDown);
+        registerShortcut("split-hand", KeyStroke.getKeyStroke(KeyEvent.VK_P, 0), this::handleSplit);
+        registerShortcut("cheat-hand", KeyStroke.getKeyStroke(KeyEvent.VK_C, 0), this::handleCheat);
+        registerShortcut("reset-saloon", KeyStroke.getKeyStroke(KeyEvent.VK_R, 0), this::handleReset);
+        registerShortcut("show-tutorial", KeyStroke.getKeyStroke(KeyEvent.VK_T, 0), this::showTutorialDialog);
+    }
+
+    private void registerShortcut(String key, KeyStroke stroke, Runnable action) {
+        getInputMap(WHEN_IN_FOCUSED_WINDOW).put(stroke, key);
+        getActionMap().put(key, new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent event) {
+                action.run();
+            }
+        });
     }
 
     private List<String> parseCards(String description) {
@@ -1019,26 +1115,60 @@ public class GamePanel extends JPanel {
         }
 
         private void drawRailPlayers(Graphics2D g2, int centerX, int centerY, int radiusX, int radiusY) {
-            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 154, "Miner", new Color(71, 52, 45), 2, false, false);
-            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 128, "Mae", new Color(77, 49, 41), 3, false, false);
-            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 90, currentSnapshot.opponentName(), new Color(53, 61, 82), 4, true, true);
-            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 52, "Boone", new Color(70, 52, 43), 2, false, false);
-            drawSeatScene(g2, centerX, centerY, radiusX, radiusY, 26, "Doc", new Color(58, 54, 70), 3, false, false);
+            List<RailSeatSnapshot> railSeats = currentSnapshot.railSeats();
+            int[] angles = {154, 128, 52, 26};
+            Color[] coatColors = {
+                new Color(71, 52, 45),
+                new Color(77, 49, 41),
+                new Color(70, 52, 43),
+                new Color(58, 54, 70)
+            };
+
+            for (int i = 0; i < Math.min(angles.length, railSeats.size()); i++) {
+                drawRailSeatScene(g2, centerX, centerY, radiusX, radiusY, angles[i], railSeats.get(i), coatColors[i]);
+            }
+
+            drawDealerSeatScene(g2, centerX, centerY, radiusX, radiusY, 90,
+                currentSnapshot.opponentName(), new Color(53, 61, 82));
         }
 
-        private void drawSeatScene(Graphics2D g2, int centerX, int centerY, int radiusX, int radiusY,
-                                   int angleDegrees, String name, Color coatColor, int chipCount,
-                                   boolean dealerCards, boolean highlight) {
+        private void drawRailSeatScene(Graphics2D g2, int centerX, int centerY, int radiusX, int radiusY,
+                                       int angleDegrees, RailSeatSnapshot seat, Color coatColor) {
+            Point seatPoint = pointOnEllipse(centerX, centerY, radiusX, radiusY, angleDegrees);
+            Point chipSpot = pointOnEllipse(centerX, centerY, radiusX - 130, radiusY - 110, angleDegrees);
+            Point cardSpot = pointOnEllipse(centerX, centerY, radiusX - 80, radiusY - 70, angleDegrees);
+
+            drawRailCharacter(g2, seatPoint.x, seatPoint.y - 20, coatColor);
+            drawBetRing(g2, chipSpot.x, chipSpot.y, 24);
+            drawChipStack(g2, chipSpot.x - 18, chipSpot.y - 8, new Color(194, 72, 56), chipCountForBet(seat.bet()));
+
+            List<String> cards = parseCards(seat.cards());
+            drawCardFan(g2, cards, cardSpot.x, cardSpot.y, 60, 84, 18);
+            drawBadge(g2, seat.name() + (seat.bet() > 0 ? " $" + seat.bet() : ""), cardSpot.x, cardSpot.y - 74,
+                74, 128, 24, new Color(18, 22, 32, 210), GOLD);
+            drawBadge(g2, seat.status(), cardSpot.x, cardSpot.y + 54,
+                82, 140, 24, new Color(10, 14, 22, 215), CREAM);
+        }
+
+        private void drawDealerSeatScene(Graphics2D g2, int centerX, int centerY, int radiusX, int radiusY,
+                                         int angleDegrees, String name, Color coatColor) {
             Point seat = pointOnEllipse(centerX, centerY, radiusX, radiusY, angleDegrees);
             Point chipSpot = pointOnEllipse(centerX, centerY, radiusX - 130, radiusY - 110, angleDegrees);
             Point cardSpot = pointOnEllipse(centerX, centerY, radiusX - 80, radiusY - 70, angleDegrees);
 
             drawRailCharacter(g2, seat.x, seat.y - 20, coatColor);
-            drawBetRing(g2, chipSpot.x, chipSpot.y, highlight ? 30 : 24);
-            drawChipStack(g2, chipSpot.x - 18, chipSpot.y - 8, highlight ? new Color(222, 183, 88) : new Color(194, 72, 56), chipCount);
+            drawBetRing(g2, chipSpot.x, chipSpot.y, 30);
+            drawChipStack(g2, chipSpot.x - 18, chipSpot.y - 8, new Color(222, 183, 88), 4);
 
-            List<String> cards = dealerCards ? parseCards(currentSnapshot.dealerCards()) : List.of("10", "8");
-            drawCardFan(g2, cards, cardSpot.x, cardSpot.y, dealerCards ? 72 : 60, dealerCards ? 98 : 84, 18);
+            List<String> cards = parseCards(currentSnapshot.dealerCards());
+            drawCardFan(g2, cards, cardSpot.x, cardSpot.y, 72, 98, 18);
+            String dealerStatus = currentSnapshot.roundActive()
+                ? "Showing " + currentSnapshot.dealerVisibleValue()
+                : "Dealer " + currentSnapshot.dealerFinalValue();
+            drawBadge(g2, name, cardSpot.x, cardSpot.y - 80, 100, 164, 24,
+                new Color(36, 30, 33, 218), CREAM);
+            drawBadge(g2, dealerStatus, cardSpot.x, cardSpot.y + 62, 92, 148, 24,
+                new Color(58, 43, 27, 220), GOLD);
         }
 
         private void drawRailCharacter(Graphics2D g2, int x, int y, Color coatColor) {
@@ -1079,7 +1209,9 @@ public class GamePanel extends JPanel {
         }
 
         private void drawPotZone(Graphics2D g2, int centerX, int centerY) {
-            int pot = currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum();
+            int playerPot = currentSnapshot.handBets().stream().mapToInt(Integer::intValue).sum();
+            int railPot = currentSnapshot.railSeats().stream().mapToInt(RailSeatSnapshot::bet).sum();
+            int pot = playerPot + railPot;
             g2.setColor(new Color(11, 16, 24, 185));
             g2.fillRoundRect(centerX - 128, centerY - 54, 256, 118, 28, 28);
             g2.setColor(new Color(255, 220, 137, 110));
@@ -1094,6 +1226,11 @@ public class GamePanel extends JPanel {
             String potText = "$" + pot;
             int pw = g2.getFontMetrics().stringWidth(potText);
             g2.drawString(potText, centerX - pw / 2, centerY + 12);
+            g2.setColor(CREAM);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            String splitText = "You $" + playerPot + "  |  Rail $" + railPot;
+            int splitWidth = g2.getFontMetrics().stringWidth(splitText);
+            g2.drawString(splitText, centerX - splitWidth / 2, centerY + 34);
             drawChipStack(g2, centerX - 86, centerY + 42, new Color(193, 72, 56), Math.max(2, Math.min(6, pot / 40 + 2)));
             drawChipStack(g2, centerX - 14, centerY + 32, new Color(44, 46, 56), Math.max(3, Math.min(7, pot / 35 + 3)));
             drawChipStack(g2, centerX + 58, centerY + 42, new Color(75, 109, 211), Math.max(2, Math.min(6, pot / 50 + 2)));
@@ -1208,6 +1345,23 @@ public class GamePanel extends JPanel {
             g2.setFont(new Font("SansSerif", Font.BOLD, 12));
             int tw = g2.getFontMetrics().stringWidth(text);
             g2.drawString(text, x + (width - tw) / 2, y + 16);
+        }
+
+        private void drawBadge(Graphics2D g2, String text, int centerX, int y, int minWidth, int maxWidth,
+                               int height, Color fill, Color textColor) {
+            if (text == null || text.isBlank()) {
+                return;
+            }
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            int width = clamp(g2.getFontMetrics().stringWidth(text) + 24, minWidth, maxWidth);
+            drawBadge(g2, text, centerX - width / 2, y, width, height, fill, textColor);
+        }
+
+        private int chipCountForBet(int bet) {
+            if (bet <= 0) {
+                return 0;
+            }
+            return clamp(bet / 15 + 1, 1, 6);
         }
 
         private void drawPrompt(Graphics2D g2, int centerX, int y) {
