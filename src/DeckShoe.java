@@ -4,12 +4,17 @@ import java.util.List;
 import java.util.Random;
 
 public class DeckShoe {
-    private final Random random = new Random();
+    private final Random random;
     private final List<Card> cards = new ArrayList<>();
     private final int deckCount;
 
     public DeckShoe(int deckCount) {
+        this(deckCount, new Random());
+    }
+
+    public DeckShoe(int deckCount, Random random) {
         this.deckCount = Math.max(1, deckCount);
+        this.random = random;
         refillAndShuffle();
     }
 
@@ -40,5 +45,11 @@ public class DeckShoe {
 
     public int remainingCards() {
         return cards.size();
+    }
+
+    void stackCardsForNextDeals(Card... nextCards) {
+        for (int i = nextCards.length - 1; i >= 0; i--) {
+            cards.add(nextCards[i]);
+        }
     }
 }

@@ -70,6 +70,10 @@ public class Player extends Participant implements Gambleable {
         return streak;
     }
 
+    public void setStreak(int streak) {
+        this.streak = Math.max(0, streak);
+    }
+
     public int getBestStreak() {
         return bestStreak;
     }
@@ -88,6 +92,10 @@ public class Player extends Participant implements Gambleable {
 
     public int getSuspicion() {
         return suspicion;
+    }
+
+    public void setSuspicion(int suspicion) {
+        this.suspicion = Math.max(0, Math.min(100, suspicion));
     }
 
     public void addSuspicion(int amount) {

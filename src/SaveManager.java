@@ -6,21 +6,40 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 public class SaveManager {
-    private static final Path SAVE_PATH = Path.of("blackjack-save.properties");
+    private static final Path DEFAULT_SAVE_PATH = Path.of(
+        System.getProperty("user.home"),
+        ".blackjack-saloon",
+        "blackjack-save.properties"
+    );
+
+    private final Path savePath;
+    private String lastErrorMessage = "";
+
+    public SaveManager() {
+        this(DEFAULT_SAVE_PATH);
+    }
+
+    public SaveManager(Path savePath) {
+        this.savePath = savePath;
+    }
 
     public SaveData load() {
         Properties properties = new Properties();
-        if (Files.exists(SAVE_PATH)) {
-            try (InputStream inputStream = Files.newInputStream(SAVE_PATH)) {
+        lastErrorMessage = "";
+        if (Files.exists(savePath)) {
+            try (InputStream inputStream = Files.newInputStream(savePath)) {
                 properties.load(inputStream);
-            } catch (IOException ignored) {
+            } catch (IOException exception) {
+                lastErrorMessage = "Couldn't load save data. Starting a fresh table instead.";
             }
         }
         return new SaveData(
             parseInt(properties.getProperty("bankroll"), 500),
             parseInt(properties.getProperty("bestStreak"), 0),
             parseInt(properties.getProperty("wins"), 0),
-            parseInt(properties.getProperty("losses"), 0)
+            parseInt(properties.getProperty("losses"), 0),
+            parseInt(properties.getProperty("streak"), 0),
+            parseInt(properties.getProperty("suspicion"), 0)
         );
     }
 
@@ -30,11 +49,29 @@ public class SaveManager {
         properties.setProperty("bestStreak", String.valueOf(player.getBestStreak()));
         properties.setProperty("wins", String.valueOf(wins));
         properties.setProperty("losses", String.valueOf(losses));
+        properties.setProperty("streak", String.valueOf(player.getStreak()));
+        properties.setProperty("suspicion", String.valueOf(player.getSuspicion()));
 
-        try (OutputStream outputStream = Files.newOutputStream(SAVE_PATH)) {
-            properties.store(outputStream, "Blackjack Saloon save");
-        } catch (IOException ignored) {
+        lastErrorMessage = "";
+        try {
+            Path parent = savePath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            try (OutputStream outputStream = Files.newOutputStream(savePath)) {
+                properties.store(outputStream, "Blackjack Saloon save");
+            }
+        } catch (IOException exception) {
+            lastErrorMessage = "Couldn't save your progress to " + savePath + ".";
         }
+    }
+
+    public Path getSavePath() {
+        return savePath;
+    }
+
+    public String getLastErrorMessage() {
+        return lastErrorMessage;
     }
 
     private int parseInt(String value, int fallback) {
@@ -48,6 +85,6 @@ public class SaveManager {
         }
     }
 
-    public record SaveData(int bankroll, int bestStreak, int wins, int losses) {
+    public record SaveData(int bankroll, int bestStreak, int wins, int losses, int streak, int suspicion) {
     }
 }

@@ -1,5 +1,6 @@
 ### IntelliJ IDEA ###
 out/
+build/
 !**/src/main/**/out/
 !**/src/test/**/out/
 .kotlin
@@ -28,3 +29,8 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Project outputs ###
+src/*.class
+blackjack-save.properties
+.blackjack-saloon/

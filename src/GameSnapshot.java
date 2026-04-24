@@ -28,6 +28,7 @@ public record GameSnapshot(
     boolean canDouble,
     boolean canSplit,
     boolean canCheat,
+    boolean railTurnsActive,
     boolean duelActive,
     boolean duelCanDraw,
     boolean showLoading

@@ -1,15 +1,19 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.function.LongSupplier;
 
 public class GameController {
     private static final int MIN_BET = 10;
+    private static final int DEFAULT_BANKROLL = 500;
 
-    private final Random random = new Random();
-    private final DeckShoe shoe = new DeckShoe(6);
+    private final Random random;
+    private final DeckShoe shoe;
     private final Player player;
     private final Dealer dealer = new Dealer("Dealer");
-    private final SaveManager saveManager = new SaveManager();
+    private final SaveManager saveManager;
+    private final LongSupplier clock;
+    private final String loadWarning;
     private final List<OpponentProfile> opponents = List.of(
         new OpponentProfile("Dusty Mae", "Cards on the table. Eyes where I can see 'em.", 6, 1, 180),
         new OpponentProfile("The Drunk Miner", "Hah! I hit on hope and whiskey.", 4, 3, 260),
@@ -30,14 +34,37 @@ public class GameController {
     private boolean roundActive;
     private boolean roundResolved;
     private boolean loading = true;
+    private boolean playerCheatedThisRound;
+    private boolean railTurnsActive;
+    private boolean duelActive;
+    private boolean duelCanDraw;
     private String statusText = "Booting the saloon...";
     private String eventText = "DON'T GAMBLE. This simulation uses fake money.";
     private long duelDrawOpenedAt;
+    private int nextRailPatronIndex;
+    private String pendingRoundSummary = "";
+    private boolean pendingAnyLoss;
 
     public GameController() {
+        this(new Random(), new SaveManager(), System::currentTimeMillis);
+    }
+
+    GameController(Random random, SaveManager saveManager, LongSupplier clock) {
+        this(random, new DeckShoe(6, random), saveManager, clock);
+    }
+
+    GameController(Random random, DeckShoe shoe, SaveManager saveManager, LongSupplier clock) {
+        this.random = random;
+        this.shoe = shoe;
+        this.saveManager = saveManager;
+        this.clock = clock;
+
         SaveManager.SaveData saveData = saveManager.load();
+        loadWarning = saveManager.getLastErrorMessage();
         player = new Player("Player", saveData.bankroll());
         player.setBestStreak(saveData.bestStreak());
+        player.setStreak(saveData.streak());
+        player.setSuspicion(saveData.suspicion());
         wins = saveData.wins();
         losses = saveData.losses();
         currentOpponent = randomOpponent();
@@ -50,7 +77,8 @@ public class GameController {
             + " sits down across from you.\n\n"
             + currentOpponent.getIntroLine()
             + "\n\nFour regulars are already splashing chips around the rail."
-            + "\n\nFake money only. Real ego damage still applies.";
+            + "\n\nFake money only. Real ego damage still applies."
+            + appendNotice(loadWarning);
     }
 
     public GameSnapshot getSnapshot() {
@@ -96,20 +124,21 @@ public class GameController {
             eventText,
             roundActive,
             roundResolved,
-            !loading && !roundActive,
+            !loading && !roundActive && !railTurnsActive && !duelActive,
             canHit(),
             canStand(),
             canDouble(),
             canSplit(),
             canCheat(),
-            false,
-            false,
+            railTurnsActive,
+            duelActive,
+            duelCanDraw,
             loading
         );
     }
 
     public void setBetAndDeal(int bet) {
-        if (loading || roundActive) {
+        if (loading || roundActive || duelActive) {
             return;
         }
         if (bet < MIN_BET) {
@@ -126,6 +155,11 @@ public class GameController {
         activeHandIndex = 0;
         roundActive = true;
         roundResolved = false;
+        playerCheatedThisRound = false;
+        railTurnsActive = false;
+        pendingRoundSummary = "";
+        pendingAnyLoss = false;
+        nextRailPatronIndex = 0;
         prepareRailRound();
 
         Hand playerHand = player.getPrimaryHand();
@@ -138,11 +172,6 @@ public class GameController {
             playerHand.addCard(shoe.deal());
             dealerHand.addCard(shoe.deal());
         }
-        int dealerUpCard = dealerHand.getCards().get(0).getValue();
-        for (RailPatron railPatron : railPatrons) {
-            railPatron.playRound(shoe, dealerUpCard, random);
-        }
-
         statusText = "Cards dealt with a hard wooden clack.";
         eventText = "Dealer shows " + dealerHand.getCards().get(0) + ".\n\nRail watch: " + buildRailSummary();
 
@@ -216,6 +245,7 @@ public class GameController {
             return;
         }
         hand.replaceCard(cheatSwap.index(), cheatSwap.replacement());
+        playerCheatedThisRound = true;
         int suspicionSpike = 14 + currentOpponent.getSuspicionSensitivity();
         player.addSuspicion(suspicionSpike);
         statusText = "You lean the hand toward 21.";
@@ -230,34 +260,106 @@ public class GameController {
             + ". Suspicion rises by "
             + suspicionSpike
             + ".";
+        if (player.getSuspicion() >= 85) {
+            eventText += "\n\n" + currentOpponent.getName() + " is watching your hands like a hawk.";
+        }
     }
 
     public void startDuelSequence() {
-        statusText = "Duels are disabled for now.";
-        eventText = "The table stays calm while we tighten up the rest of the game.";
+        startDuelSequence(
+            "A hush rolls across the felt.",
+            "Rail watch: " + buildRailSummary()
+        );
     }
 
     public void armDuel() {
-        statusText = "Duels are disabled for now.";
+        if (!duelActive || duelCanDraw) {
+            return;
+        }
+        duelCanDraw = true;
+        duelDrawOpenedAt = clock.getAsLong();
+        statusText = "Hands hover above the holsters.";
+        eventText = currentOpponent.getName()
+            + " twitches first.\n\nDraw now.\n\n"
+            + "Beat " + currentOpponent.getName() + "'s pace or lose the table.";
     }
 
     public void drawDuel() {
-        statusText = "Duels are disabled for now.";
+        if (!duelActive) {
+            statusText = "No one is drawing on you right now.";
+            return;
+        }
+
+        if (!duelCanDraw) {
+            resolveDuel(false, -1, true);
+            return;
+        }
+
+        int reactionTime = (int) Math.max(0L, clock.getAsLong() - duelDrawOpenedAt);
+        int opponentWindow = Math.max(
+            120,
+            currentOpponent.getDuelDifficulty() + random.nextInt(121) - currentOpponent.getAggression() * 12
+        );
+        resolveDuel(reactionTime <= opponentWindow, reactionTime, false);
+    }
+
+    public boolean hasPendingRailTurns() {
+        return railTurnsActive;
+    }
+
+    public void advanceRailTurn() {
+        if (!railTurnsActive) {
+            return;
+        }
+
+        if (nextRailPatronIndex >= railPatrons.size()) {
+            railTurnsActive = false;
+            finalizeRound(pendingRoundSummary, pendingAnyLoss);
+            return;
+        }
+
+        RailPatron railPatron = railPatrons.get(nextRailPatronIndex++);
+        int dealerUpCard = dealer.getPrimaryHand().getCards().isEmpty()
+            ? 0
+            : dealer.getPrimaryHand().getCards().get(0).getValue();
+        railPatron.playRound(shoe, dealerUpCard, random);
+        railPatron.settleAgainst(dealer.getPrimaryHand());
+
+        statusText = railPatron.snapshot().name() + " plays out the hand.";
+        eventText = railPatron.getSummary();
+
+        if (nextRailPatronIndex >= railPatrons.size()) {
+            eventText += "\n\nThe rail settles down and the next hand can begin.";
+        } else {
+            eventText += "\n\nNext up: " + railPatrons.get(nextRailPatronIndex).snapshot().name() + ".";
+        }
     }
 
     public void resetSave() {
-        player.setBankroll(500);
+        player.setBankroll(DEFAULT_BANKROLL);
         player.setBestStreak(0);
-        player.coolSuspicion(100);
+        player.setStreak(0);
+        player.setSuspicion(0);
         wins = 0;
         losses = 0;
         currentOpponent = randomOpponent();
+        roundActive = false;
+        roundResolved = false;
+        railTurnsActive = false;
+        duelActive = false;
+        duelCanDraw = false;
+        playerCheatedThisRound = false;
+        nextRailPatronIndex = 0;
+        pendingRoundSummary = "";
+        pendingAnyLoss = false;
+        dealer.resetHands();
+        player.resetHands();
         statusText = "Fresh bankroll. Fresh lies.";
         eventText = "High scores wiped from the chalkboard.";
         for (RailPatron railPatron : railPatrons) {
             railPatron.resetSession();
         }
-        saveManager.save(player, wins, losses);
+        persistProgress();
     }
 
     private void moveToNextHandOrDealer() {
@@ -289,9 +391,6 @@ public class GameController {
         boolean dealerBust = dealerHand.isBust();
         StringBuilder summary = new StringBuilder();
         boolean anyLoss = false;
-        for (RailPatron railPatron : railPatrons) {
-            railPatron.settleAgainst(dealerHand);
-        }
 
         for (int i = 0; i < player.getHands().size(); i++) {
             Hand hand = player.getHands().get(i);
@@ -334,6 +433,73 @@ public class GameController {
         }
 
         statusText = summary.toString();
+        if (shouldStartDuelAfterRound()) {
+            startDuelSequence(summary.toString(), "Rail watch: " + buildRailSummary());
+            return;
+        }
+        beginRailTurns(summary.toString(), anyLoss, dealerValue, dealerBust);
+    }
+
+    private void startDuelSequence(String roundSummary, String railSummary) {
+        duelActive = true;
+        duelCanDraw = false;
+        duelDrawOpenedAt = 0L;
+        railTurnsActive = false;
+        roundActive = false;
+        roundResolved = true;
+        activeHandIndex = 0;
+        statusText = currentOpponent.getName() + " calls you out.";
+        eventText = roundSummary
+            + "\n\n"
+            + currentOpponent.getName()
+            + " slams a palm on the rail and calls cheat."
+            + "\n\n"
+            + "Wait for the draw cue, then hit Draw or SPACE."
+            + "\n\n"
+            + railSummary;
+    }
+
+    private void resolveDuel(boolean playerWon, int reactionTime, boolean earlyDraw) {
+        duelActive = false;
+        duelCanDraw = false;
+        railTurnsActive = false;
+        int purse = 60 + currentOpponent.getAggression() * 15;
+        int penalty = Math.min(Math.max(75, player.getBankroll() / 5), Math.max(75, player.getBankroll()));
+
+        if (playerWon) {
+            player.adjustBankroll(purse);
+            player.recordWin();
+            player.coolSuspicion(40);
+            wins++;
+            statusText = "You outdraw " + currentOpponent.getName() + ".";
+            eventText = "Your hand clears leather in " + reactionTime + "ms."
+                + "\n\nThe room backs down and a pouch with $" + purse + " slides your way."
+                + "\n\nA new opponent takes the empty chair.";
+        } else {
+            int actualPenalty = Math.min(penalty, player.getBankroll());
+            player.adjustBankroll(-actualPenalty);
+            player.recordLoss();
+            player.setSuspicion(0);
+            losses++;
+            statusText = earlyDraw ? "You flinch early." : currentOpponent.getName() + " wins the draw.";
+            eventText = earlyDraw
+                ? currentOpponent.getName() + " catches your jump before the signal."
+                    + "\n\nThe house scoops $" + actualPenalty + " off your stack."
+                : currentOpponent.getName() + " beats your " + reactionTime + "ms draw."
+                    + "\n\nThe house scoops $" + actualPenalty + " off your stack.";
+        }
+
+        if (player.getBankroll() < MIN_BET) {
+            player.adjustBankroll(150);
+            eventText += "\n\nThe bartender fronts you $150 to keep the game alive.";
+        }
+
+        currentOpponent = randomOpponent();
+        persistProgress();
+    }
+
+    private void finalizeRound(String roundSummary, boolean anyLoss) {
+        railTurnsActive = false;
         eventText = "Press Deal for the next hand.\n\nRail watch: " + buildRailSummary();
         player.coolSuspicion(anyLoss ? 8 : 4);
 
@@ -344,7 +510,37 @@ public class GameController {
             eventText += "\n\nA fresh opponent steps in while the old one drags the table upright.";
             currentOpponent = randomOpponent();
         }
-        saveManager.save(player, wins, losses);
+
+        if (!roundSummary.isBlank()) {
+            statusText = roundSummary;
+        }
+        persistProgress();
+    }
+
+    private void beginRailTurns(String roundSummary, boolean anyLoss, int dealerValue, boolean dealerBust) {
+        pendingRoundSummary = roundSummary;
+        pendingAnyLoss = anyLoss;
+        nextRailPatronIndex = 0;
+
+        if (railPatrons.isEmpty()) {
+            finalizeRound(roundSummary, anyLoss);
+            return;
+        }
+
+        railTurnsActive = true;
+        statusText = roundSummary;
+        eventText = "Dealer settles on "
+            + dealerValue
+            + (dealerBust ? " and busts." : ".")
+            + "\n\nRail turns begin with "
+            + railPatrons.get(0).snapshot().name()
+            + ".";
+    }
+
+    private boolean shouldStartDuelAfterRound() {
+        return playerCheatedThisRound
+            && player.getSuspicion() >= 35
+            && shouldTriggerAccusation(player.getSuspicion());
     }
 
     private boolean shouldTriggerAccusation(int suspicion) {
@@ -356,7 +552,7 @@ public class GameController {
     }
 
     private boolean canDouble() {
-        if (!roundActive || activeHandIndex >= player.getHands().size()) {
+        if (!roundActive || duelActive || railTurnsActive || activeHandIndex >= player.getHands().size()) {
             return false;
         }
         Hand hand = player.getHands().get(activeHandIndex);
@@ -364,7 +560,7 @@ public class GameController {
     }
 
     private boolean canSplit() {
-        if (!roundActive || activeHandIndex >= player.getHands().size()) {
+        if (!roundActive || duelActive || railTurnsActive || activeHandIndex >= player.getHands().size()) {
             return false;
         }
         Hand hand = player.getHands().get(activeHandIndex);
@@ -372,11 +568,12 @@ public class GameController {
     }
 
     private boolean canCheat() {
-        return roundActive && activeHandIndex < player.getHands().size() && player.getSuspicion() < 100;
+        return roundActive && !duelActive && !railTurnsActive
+            && activeHandIndex < player.getHands().size() && player.getSuspicion() < 100;
     }
 
     private boolean canHit() {
-        return roundActive && activeHandIndex < player.getHands().size();
+        return roundActive && !duelActive && !railTurnsActive && activeHandIndex < player.getHands().size();
     }
 
     private boolean canStand() {
@@ -404,4 +601,15 @@ public class GameController {
         return builder.toString();
     }
 
+    private void persistProgress() {
+        saveManager.save(player, wins, losses);
+        String saveWarning = saveManager.getLastErrorMessage();
+        if (!saveWarning.isBlank()) {
+            eventText += appendNotice(saveWarning);
+        }
+    }
+
+    private String appendNotice(String notice) {
+        return notice == null || notice.isBlank() ? "" : "\n\n" + notice;
+    }
 }
