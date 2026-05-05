@@ -5,7 +5,6 @@ class RailPatron {
     private final int openingStack;
     private final int tableMinimum;
     private final int preferredBet;
-    // Strategy pattern: each rail player delegates betting and table decisions to a play style.
     private final RailPlayStrategy strategy;
 
     private Hand hand = new Hand();
